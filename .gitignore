@@ -12,5 +12,12 @@ wheels/
 # model checkpoints
 code/models
 
-# wikipedia data
+# 압축되지 않은 data
+raw/data/test_dataset
+raw/data/train_dataset
 raw/data/wikipedia_documents.json
+
+# embedding
+
+raw/data/sparse_embedding.bin
+raw/data/tfidv.bin
