@@ -11,10 +11,17 @@ dependencies = [
     "langchain>=0.3.27",
     "langchain-community>=0.3.21",
     "langchain-huggingface>=0.3.1",
+    "matplotlib>=3.10.7",
     "numpy<2.0.0",
     "pandas==2.3.3",
     "rank-bm25>=0.2.2",
     "scikit-learn>=1.7.2",
+    "seaborn>=0.13.2",
     "sentence-transformers>=5.1.2",
     "transformers>=4.42.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
 ]
