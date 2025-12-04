@@ -205,7 +205,7 @@ class HybridRetrieval:
             ):
                 retrieved_docs = self.retriever.invoke(query)
 
-                context = " ".join([doc.page_content for doc in retrieved_docs])
+                context = "\n".join([doc.page_content for doc in retrieved_docs])
 
                 tmp = {
                     "question": query,
