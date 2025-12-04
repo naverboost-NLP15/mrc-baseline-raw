@@ -1,23 +1,19 @@
-from genericpath import isfile
 import os
 import json
 import time
 import pickle
 import pandas as pd
 import numpy as np
-import torch
 from tqdm.auto import tqdm
-from typing import Callable, List, Union, Tuple, Optional, NoReturn
 from contextlib import contextmanager
-
+from typing import List, Union, Optional
 from datasets import Dataset
 
-# LangChain 관련 임포트
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_community.retrievers import BM25Retriever
-from langchain_classic.retrievers import EnsembleRetriever
-from langchain_classic.schema import Document
+import torch
+from rank_bm25 import BM25Okapi
+from kiwipiepy import Kiwi
+from sentence_transformers import SentenceTransformer
+import faiss
 
 
 @contextmanager

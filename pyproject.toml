@@ -8,6 +8,7 @@ dependencies = [
     "accelerate==0.30.0",
     "evaluate==0.4.6",
     "faiss-gpu>=1.7.2",
+    "kiwi>=10.2.34",
     "langchain>=0.3.27",
     "langchain-community>=0.3.21",
     "langchain-huggingface>=0.3.1",
