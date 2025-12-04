@@ -132,12 +132,16 @@ class HybridRetrieval:
         self,
         query_or_dataset: str | Dataset,
         topk: int | None,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | list[Document]:
         """
         LangChain Ensemble Retriever를 사용하여 문서 검색
 
         Args:
-            query_or_dataset (str | Dataset): _description_
+            query_or_dataset (str | Dataset):
+                str이나 Dataset으로 이루어진 Query를 받습니다.
+                str 형태인 하나의 query만 받으면 langchain의 `retriever.invoke`를 통해 유사도를 구합니다.
+                Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
+                이 경우 `get_relevant_doc_bulk`를 통해 유사도를 구합니다.
             topk (int | None): _description_
 
         Returns:
@@ -149,3 +153,50 @@ class HybridRetrieval:
         # topk 설정 업데이트 (Retrievers의 k값 조정)
         self.retriever.retrievers[0].k = topk  # BM25
         self.retriever.retrievers[1].search_kwargs["k"] = topk  # Dense
+
+        total = []  # Multi-Query 대비 list
+
+        # 단일 쿼리를 받는 경우
+        if isinstance(query_or_dataset, str):
+            with timer("Single Query Search"):
+                docs = self.retriever.invoke(query_or_dataset)
+                print(f"[Query]: {query_or_dataset}")
+
+                for i, doc in enumerate(docs):
+                    print(f"Top-{i+1}: {doc.page_content[:50]}...")
+
+            return docs
+
+        # 다수 쿼리를 받는 경우
+        elif isinstance(query_or_dataset, Dataset):
+            queries = query_or_dataset["question"]
+
+            print(f"Retrieving for {len(queries)} queries...")
+
+            # LangChain의 invoke는 단일 쿼리용이므로 loop를 돌아야 함.
+            # 배치 처리를 위해 vectorstore의 search를 직접 배치로 돌리는 방법도 있으나
+            # EnsembleRetriever 구조상 loop가 가장 안전하다고 함.
+
+            for idx, query in enumerate(
+                tqdm(queries, desc="Hybrid Retrieval on mulit queries")
+            ):
+                retrieved_docs = self.retriever.invoke(query)
+
+                context = " ".join([doc.page_content for doc in retrieved_docs])
+
+                tmp = {
+                    "question": query,
+                    "id": query_or_dataset[idx]["id"],
+                    "context": context,
+                }
+
+                if (
+                    "context" in query_or_dataset.features
+                    and "answers" in query_or_dataset.features
+                ):
+                    tmp["original_context"] = query_or_dataset[idx]["context"]
+                    tmp["answers"] = query_or_dataset[idx]["answers"]
+
+                total.append(tmp)
+
+            return pd.DataFrame(total)
