@@ -51,14 +51,34 @@ class HybridRetrieval:
             wiki: dict = json.load(f)
 
         # 중복 제거 및 Langchain Document 형식으로 변환
-        self.contexts = list(dict.fromkeys([v["text"] for v in wiki.values()]))
-        self.ids = list(range(len(self.contexts)))
+        # text + title 정보 추가, 중복 제거는 text 기준으로만 변경
 
-        # LangChain Document 객체 생성
-        self.documents = [
-            Document(page_content=text, metadata={"id": i})
-            for i, text in enumerate(self.contexts)
-        ]
+        self.documents = []
+        seen_texts = set()
+
+        print("document 처리 중 (Title + Text 전략)...")
+        for v in wiki.values():
+            text = v["text"]
+            title = v["title"]
+            doc_id = v["document_id"]
+
+            if text in seen_texts:
+                continue
+
+            seen_texts.add(text)
+
+            combined_context = f"{title}\n{text}"
+
+            self.documents.append(
+                Document(
+                    page_content=combined_context,
+                    metadata={
+                        "id": doc_id,
+                        "title": title,
+                        "original_text": text,
+                    },
+                )
+            )
 
         # Retriever 초기화
         self.retriever: EnsembleRetriever | None = None
@@ -113,7 +133,10 @@ class HybridRetrieval:
             # 여기서는 편의상 from_documents 사용 (내부적으로 기본 토크나이저 사용됨)
             # TODO: 성능을 높이려면 konlpy Mecab 등의 토크나이저로 전처리가 필요함.
 
-            bm25_retriever = BM25Retriever.from_documents(self.documents)
+            bm25_retriever = BM25Retriever.from_documents(
+                self.documents,
+                preprocess_func=self.tokenize_fn,
+            )
             bm25_retriever.k = 10
 
             with open(bm25_path, "wb") as f:
@@ -141,8 +164,8 @@ class HybridRetrieval:
                 str이나 Dataset으로 이루어진 Query를 받습니다.
                 str 형태인 하나의 query만 받으면 langchain의 `retriever.invoke`를 통해 유사도를 구합니다.
                 Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
-                이 경우 `get_relevant_doc_bulk`를 통해 유사도를 구합니다.
-            topk (int | None): _description_
+                이 경우, 다수의 query를 처리하기 위해 for 루프를 통해 여러 번 invoke를 호출하며, 얻은 docs를 total 리스트에 저장합니다.
+            topk (int | None): 상위 k개의 문서를 반환합니다.
 
         Returns:
             pd.DataFrame: _description_
@@ -200,3 +223,10 @@ class HybridRetrieval:
                 total.append(tmp)
 
             return pd.DataFrame(total)
+
+
+import torch
+
+
+if __name__ == "__main__":
+    pass
