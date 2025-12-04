@@ -1,0 +1,32 @@
+
+## roberta running
+```
+uv run train.py \
+--output_dir ./models/train_dataset/roberta-large \
+--do_train \
+--do_eval \
+--model_name_or_path klue/roberta-large \
+--dataset_name ../data/train_dataset \
+--per_device_train_batch_size 32 \
+--per_device_eval_batch_size 32 \
+--learning_rate 3e-5 \
+--num_train_epochs 3 \
+--weight_decay 0.01 \
+--fp16 \
+--logging_steps 100 \
+--eval_steps 500 \
+--save_steps 500 \
+--evaluation_strategy steps \
+--save_total_limit 2 \
+--load_best_model_at_end \
+```
+
+```
+python inference.py \
+--output_dir ./predictions/ \
+--dataset_name ../raw/data/test_dataset/ \
+--model_name_or_path ./models/train_dataset/ \
+--do_predict \
+--eval_retrieval \
+--top_k_retrieval 10
+```
