@@ -317,19 +317,19 @@ if __name__ == "__main__":
     print(full_ds)
 
     # Hybrid Retrieval 초기화
-    retrieval = HybridRetrieval(
+    retriever = HybridRetrieval(
         tokenize_fn=None,  # 내부적으로 kiwi tokenzier 사용
         data_path=args.data_path,
         context_path=args.context_path,
     )
 
     # 임베딩 생성 또는 로드
-    retrieval.get_embedding()
+    retriever.get_embedding()
 
     # Retrieval 성능 테스트
     # Ground Truth(original_context)가 검색된 Top-K 문서들(context) 안에 포함되어 있는지 확인.
     with timer("Bulk query by Hybrid search"):
-        df = retrieval.retrieve(query_or_dataset=full_ds, topk=args.topk)
+        df = retriever.retrieve(query_or_dataset=full_ds, topk=args.topk)
 
         if "original_context" in df.columns:
             correct_count = 0
@@ -340,3 +340,10 @@ if __name__ == "__main__":
             print(f"Top-{args.topk} Retrieval Accuracy: {acc:.4f}")
         else:
             print("ground truth context가 없습니다. 성능 체크를 스킵합니다.")
+
+    # Single Query Test
+    test_query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
+    print(f"\n[Test Single Query]: {test_query}")
+    res_df = retriever.retrieve(test_query, topk=5)
+    print("Result Context Sample:")
+    print(res_df.iloc[0]["context"])
