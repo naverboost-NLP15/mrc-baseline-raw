@@ -31,6 +31,8 @@ class HybridRetrieval:
         tokenize_fn=None,
         data_path: str = "./raw/data",
         context_path: str = "wikipedia_documents.json",
+        chunk_size: int = 1000,
+        chunk_overlap: int = 100,
     ) -> None:
         """
         BM25(Sparse) + FAISS(Dense)를 결합한 Hybrid Retriever
@@ -39,9 +41,13 @@ class HybridRetrieval:
             tokenize_fn (None): Defaults to Kiwi tokenizer
             data_path (str | None, optional): _description_. Defaults to "./raw/data".
             context_path (str | None, optional): _description_. Defaults to "wikipedia_documents.json".
+            chunk_size (int, optional): Chunk size. Defaults to 1000.
+            chunk_overlap (int, optional): Chunk overlap. Defaults to 100.
         """
         self.data_path = data_path
         self.context_path = context_path
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
 
         # 문서 로드
         with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
@@ -50,17 +56,30 @@ class HybridRetrieval:
         self.texts = []
         self.titles = []
         self.ids = []
+        self.doc_ids = []  # 원본 문서 ID
 
-        # 중복 제거 및 데이터 리스트 생성
-        print("중복 text 제거 중...")
-        seen_texts = set()  # 모든 id값은 고유하지만, 중복되는 text가 존재하므로, 제거
-        for v in wiki.values():
-            text, title, id = v["text"], v["title"], v["document_id"]
-            if text not in seen_texts:
-                self.texts.append(text)
+        # 중복 제거 및 데이터 리스트 생성 (Chunking 적용)
+        print("문서 로드 및 Chunking 중...")
+        seen_texts = set()
+
+        for v in tqdm(wiki.values(), desc="Processing Wiki"):
+            text, title, doc_id = v["text"], v["title"], v["document_id"]
+
+            if text in seen_texts:
+                continue
+
+            seen_texts.add(text)
+
+            # !Chunking
+            chunks = self.split_text(text, self.chunk_size, self.chunk_overlap)
+
+            for chunk in chunks:
+                self.texts.append(chunk)
                 self.titles.append(title)
-                self.ids.append(id)
-                seen_texts.add(text)
+                self.doc_ids.append(doc_id)
+                self.ids.append(len(self.ids))  # Chunk ID (0부터 시작하는 고유 ID)
+
+        print(f"Total Chunks: {len(self.texts)}")
 
         # Kiwi 형태소 분석기
         self.kiwi = Kiwi()
@@ -72,6 +91,29 @@ class HybridRetrieval:
 
         self.bm25 = None
         self.faiss_index = None
+
+    def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
+        """
+        텍스트를 공백 기준으로 나누어 Chunking합니다.
+        """
+        if not text:
+            return []
+
+        words = text.split()
+        if len(words) <= chunk_size:
+            return [text]
+
+        chunks = []
+        start = 0
+        while start < len(words):
+            end = min(start + chunk_size, len(words))
+            chunk = " ".join(words[start:end])
+            chunks.append(chunk)
+            if end == len(words):
+                break
+            start += chunk_size - chunk_overlap
+
+        return chunks
 
     def kiwi_tokenizer(self, text: str) -> list[str]:
         """
@@ -99,11 +141,14 @@ class HybridRetrieval:
         BM25 Retriever와 Dense Retriever를 생성하거나 로드하여 Ensemble Retriever를 구축
         """
 
-        # sparse, dense embedding 저장 경로 설정
+        # sparse, dense embedding 저장 경로 설정 (Chunk 정보 포함)
         model_name_str = self.embedding_model_name.replace("/", "_")
+        chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}"
 
-        bm25_path = os.path.join(self.data_path, "bm25_wiki.pkl")
-        faiss_path = os.path.join(self.data_path, f"faiss_{model_name_str}.index")
+        bm25_path = os.path.join(self.data_path, f"bm25_wiki{chunk_suffix}.pkl")
+        faiss_path = os.path.join(
+            self.data_path, f"faiss_{model_name_str}{chunk_suffix}.index"
+        )
 
         # Sparse(BM25) 설정
         if os.path.isfile(bm25_path):
