@@ -90,3 +90,9 @@ class DataTrainingArguments:
     use_faiss: bool = field(
         default=False, metadata={"help": "Whether to build with faiss"}
     )
+    bm25_weight: float = field(
+        default=1.0, metadata={"help": "Weight for BM25 retrieval."}
+    )
+    dense_weight: float = field(
+        default=1.0, metadata={"help": "Weight for Dense retrieval."}
+    )

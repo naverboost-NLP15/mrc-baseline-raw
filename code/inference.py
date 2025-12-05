@@ -119,7 +119,14 @@ def run_sparse_retrieval(
     )
     retriever.get_embedding()
 
-    df = retriever.retrieve(datasets["validation"], topk=data_args.top_k_retrieval)
+    # HybridRetrieval은 get_embedding()에서 이미 FAISS 준비를 마치고,
+    # retrieve()에서 Hybrid 검색을 수행합니다.
+    df = retriever.retrieve(
+        datasets["validation"],
+        topk=data_args.top_k_retrieval,
+        bm25_weight=data_args.bm25_weight,
+        dense_weight=data_args.dense_weight,
+    )
 
     # test data 에 대해선 정답이 없으므로 id question context 로만 데이터셋이 구성됩니다.
     if training_args.do_predict:
