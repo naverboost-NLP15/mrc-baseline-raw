@@ -66,7 +66,7 @@ class HybridRetrieval:
         self.kiwi = Kiwi()
         # Dense Model Load
         self.embedding_model_name = (
-            "Qwen/Qwen3-Embedding-0.6B"  # TODO: Fix Embedding Model
+            "intfloat/multilingual-e5-large-instruct"  # TODO: Fix Embedding Model
         )
         self.encoder = SentenceTransformer(self.embedding_model_name)
 
@@ -136,7 +136,7 @@ class HybridRetrieval:
             docs = [f"{tit}\n{txt}" for tit, txt in zip(self.titles, self.texts)]
             embeddings = self.encoder.encode(
                 sentences=docs,
-                batch_size=32,
+                batch_size=8,
                 show_progress_bar=True,
                 normalize_embeddings=True,
             )
@@ -213,7 +213,7 @@ class HybridRetrieval:
 
         query_embeds = self.encoder.encode(
             dense_queries,
-            batch_size=32,
+            batch_size=8,
             show_progress_bar=True,
             normalize_embeddings=True,
         )
@@ -279,14 +279,14 @@ if __name__ == "__main__":
         "--dataset_name",
         metavar="./data/train_dataset",
         type=str,
-        default="../data/train_dataset",
+        default="raw/data/train_dataset",
         help="Path to the dataset",
     )
     parser.add_argument(
         "--data_path",
         metavar="./data",
         type=str,
-        default="../data",
+        default="raw/data",
         help="Path to the directory",
     )
     parser.add_argument(

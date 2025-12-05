@@ -383,19 +383,31 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="")
     parser.add_argument(
-        "--dataset_name", metavar="./data/train_dataset", type=str, help=""
+        "--dataset_name",
+        metavar="./data/train_dataset",
+        type=str,
+        default="raw/data/train_dataset",
+        help="",
     )
     parser.add_argument(
         "--model_name_or_path",
         metavar="bert-base-multilingual-cased",
         type=str,
+        default="klue/bert-base",
         help="",
     )
-    parser.add_argument("--data_path", metavar="./data", type=str, help="")
     parser.add_argument(
-        "--context_path", metavar="wikipedia_documents", type=str, help=""
+        "--data_path", metavar="./data", type=str, default="raw/data", help=""
     )
-    parser.add_argument("--use_faiss", metavar=False, type=bool, help="")
+    parser.add_argument(
+        "--context_path",
+        metavar="wikipedia_documents",
+        type=str,
+        default="wikipedia_documents.json",
+        help="",
+    )
+    parser.add_argument("--use_faiss", metavar=False, type=bool, default=False, help="")
+    parser.add_argument("--topk", metavar=20, type=int, default=20, help="")
 
     args = parser.parse_args()
 
@@ -423,29 +435,39 @@ if __name__ == "__main__":
         context_path=args.context_path,
     )
 
-    query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
+    retriever.get_sparse_embedding()
+
+    # query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
 
     if args.use_faiss:
+        retriever.build_faiss()
 
         # test single query
-        with timer("single query by faiss"):
-            scores, indices = retriever.retrieve_faiss(query)
+        # with timer("single query by faiss"):
+        #     scores, indices = retriever.retrieve_faiss(query)
 
         # test bulk
-        with timer("bulk query by exhaustive search"):
-            df = retriever.retrieve_faiss(full_ds)
-            df["correct"] = df["original_context"] == df["context"]
+        with timer("bulk query by faiss"):
+            df = retriever.retrieve_faiss(full_ds, topk=args.topk)
+            df["correct"] = df.apply(
+                lambda x: x["original_context"] in x["context"], axis=1
+            )
 
-            print("correct retrieval result by faiss", df["correct"].sum() / len(df))
-
-    else:
-        with timer("bulk query by exhaustive search"):
-            df = retriever.retrieve(full_ds)
-            df["correct"] = df["original_context"] == df["context"]
             print(
-                "correct retrieval result by exhaustive search",
+                f"Top-{args.topk} Retrieval Accuracy (FAISS):",
                 df["correct"].sum() / len(df),
             )
 
-        with timer("single query by exhaustive search"):
-            scores, indices = retriever.retrieve(query)
+    else:
+        with timer("bulk query by exhaustive search"):
+            df = retriever.retrieve(full_ds, topk=args.topk)
+            df["correct"] = df.apply(
+                lambda x: x["original_context"] in x["context"], axis=1
+            )
+            print(
+                f"Top-{args.topk} Retrieval Accuracy (Sparse):",
+                df["correct"].sum() / len(df),
+            )
+
+        # with timer("single query by exhaustive search"):
+        #     scores, indices = retriever.retrieve(query)

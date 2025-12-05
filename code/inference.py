@@ -92,7 +92,7 @@ def main():
 
     # True일 경우 : run passage retrieval
     if data_args.eval_retrieval:
-        datasets = run_sparse_retrieval(
+        datasets = run_retrieval(
             tokenizer.tokenize,
             datasets,
             training_args,
@@ -104,12 +104,12 @@ def main():
         run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
 
 
-def run_sparse_retrieval(
+def run_retrieval(
     tokenize_fn: Callable[[str], List[str]],
     datasets: DatasetDict,
     training_args: TrainingArguments,
     data_args: DataTrainingArguments,
-    data_path: str = "../raw/data",
+    data_path: str = "raw/data",
     context_path: str = "wikipedia_documents.json",
 ) -> DatasetDict:
 

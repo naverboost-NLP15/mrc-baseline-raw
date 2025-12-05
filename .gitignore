@@ -21,3 +21,5 @@ raw/data/wikipedia_documents.json
 
 raw/data/sparse_embedding.bin
 raw/data/tfidv.bin
+raw/data/bm25_wiki.pkl
+raw/data/faiss_intfloat_multilingual-e5-large-instruct.index

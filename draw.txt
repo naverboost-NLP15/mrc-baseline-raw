@@ -33,7 +33,7 @@ python inference.py \
  
 ```
 uv run train.py \
---output_dir ./models/train_dataset/baseline_hybird \
+--output_dir ./models/train_dataset/baseline_hybird_add_dense \
 --do_train \
 --do_eval \
 --model_name_or_path klue/bert-base \
@@ -47,4 +47,16 @@ uv run train.py \
 --eval_steps 500 \
 --save_steps 500 \
 --overwrite_cache
+```
+
+```
+uv run code/inference.py \
+--output_dir code/predictions/baseline_hybird_add_dense \
+--dataset_name raw/data/test_dataset/ \
+--model_name_or_path code/models/train_dataset/baseline_hybird_add_dense \
+--do_predict \
+--eval_retrieval \
+--top_k_retrieval 10 \
+--bm25_weight 0.5 \
+--dense_weight 0.5 
 ```
