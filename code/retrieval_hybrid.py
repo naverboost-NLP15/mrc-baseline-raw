@@ -16,6 +16,8 @@ from kiwipiepy import Kiwi
 from sentence_transformers import SentenceTransformer
 import faiss
 
+from numpy.typing import NDArray
+
 
 @contextmanager
 def timer(name):
@@ -72,8 +74,6 @@ class HybridRetrieval:
         self.bm25 = None
         self.faiss_index = None
 
-    # TODO: Ensemble Retriever 구현
-
     def kiwi_tokenizer(self, text: str) -> list[str]:
         """
         형태소의 품사가 명사, 동사, 형용사 등인 형태소만 추출
@@ -121,7 +121,6 @@ class HybridRetrieval:
             with open(bm25_path, "wb") as f:
                 pickle.dump(self.bm25, f)
             print("BM25 retriever saved.")
-            # TODO: bm25_retriever.k = 10
 
         # Dense 설정
 
@@ -150,10 +149,16 @@ class HybridRetrieval:
     def retrieve(
         self,
         query_or_dataset: str | Dataset,
-        topk: int | None,
-    ) -> pd.DataFrame | list[Document]:
+        topk: int = 20,
+    ) -> pd.DataFrame:
+        # TODO: Hybrid + reranker
+        # reranker_model = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3")
+        # compressor = CrossEncoderReranker(model=reranker_model, top_n=3)
+        # compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=ensemble_retriever)
+        # TODO: Langchain의 Ensemble Retriever는 RRF + Weight를 사용, 우리도 Weight 도입이 필요.
+
         """
-        LangChain Ensemble Retriever를 사용하여 문서 검색
+        Hybrid Search 수행 함수
 
         Args:
             query_or_dataset (str | Dataset):
@@ -161,68 +166,98 @@ class HybridRetrieval:
                 str 형태인 하나의 query만 받으면 langchain의 `retriever.invoke`를 통해 유사도를 구합니다.
                 Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
                 이 경우, 다수의 query를 처리하기 위해 for 루프를 통해 여러 번 invoke를 호출하며, 얻은 docs를 total 리스트에 저장합니다.
-            topk (int | None): 상위 k개의 문서를 반환합니다.
+            topk (int = 20): 상위 k개의 문서를 반환합니다.
 
         Returns:
             pd.DataFrame: _description_
         """
 
-        assert self.retriever is not None, "get_embedding() 이 먼저 호출되어야 합니다."
+        assert (
+            self.bm25 is not None and self.faiss_index is not None
+        ), "get_embedding() 이 먼저 호출되어야 합니다."
 
-        # topk 설정 업데이트 (Retrievers의 k값 조정)
-        self.retriever.retrievers[0].k = topk  # BM25
-        self.retriever.retrievers[1].search_kwargs["k"] = topk  # Dense
-
-        total = []  # Multi-Query 대비 list
-
-        # 단일 쿼리를 받는 경우
         if isinstance(query_or_dataset, str):
-            with timer("Single Query Search"):
-                docs = self.retriever.invoke(query_or_dataset)
-                print(f"[Query]: {query_or_dataset}")
+            queries = [query_or_dataset]
 
-                for i, doc in enumerate(docs):
-                    print(f"Top-{i+1}: {doc.page_content[:50]}...")
-
-            return docs
-
-        # 다수 쿼리를 받는 경우
         elif isinstance(query_or_dataset, Dataset):
             queries = query_or_dataset["question"]
 
-            print(f"Retrieving for {len(queries)} queries...")
+        else:
+            queries = query_or_dataset  # list
 
-            # LangChain의 invoke는 단일 쿼리용이므로 loop를 돌아야 함.
-            # 배치 처리를 위해 vectorstore의 search를 직접 배치로 돌리는 방법도 있으나
-            # EnsembleRetriever 구조상 loop가 가장 안전하다고 함.
+        total_results = []
 
-            for idx, query in enumerate(
-                tqdm(queries, desc="Hybrid Retrieval on mulit queries")
+        # 1. Sparse Search (BM25)
+        print("Sparse 검색 중...")
+        bm25_scores_list: list[NDArray[np.float64]] | list = []
+        bm25_indices_list: list[NDArray[np.int64]] | list = []
+
+        for query in tqdm(queries, desc="BM25"):
+            tokenized_query = self.kiwi_tokenizer(query)
+            scores = self.bm25.get_scores(tokenized_query)
+
+            # Top-k 인덱스만 뽑아옵니다.
+            topk_indices = np.argsort(scores)[::-1][:topk]
+            bm25_scores_list.append(scores[topk_indices])
+            bm25_indices_list.append(topk_indices)
+
+        # 2. Dense Search (FAISS)
+        print("Dense 검색 중...")
+        query_embeds = self.encoder.encode(
+            queries,
+            batch_size=32,
+            show_progress_bar=True,
+            normalize_embeddings=True,
+        )
+        dense_scores_list, dense_indices_list = self.faiss_index.search(
+            query_embeds, topk
+        )
+
+        # 3. Fusion
+        print("Fusing...")
+        k = 60  # 보통 60이 쓰임.
+
+        for i, query in enumerate(tqdm(queries, desc="Fusion")):
+            doc_score_map: dict[int, float] = {}
+
+            # Sparse Scores (Rank based)
+            for rank, idx in enumerate(bm25_indices_list[i]):
+                if idx not in doc_score_map:
+                    doc_score_map[idx] = 0
+                doc_score_map[idx] += 1 / (k + rank + 1)
+
+            # Dense Scorcs (Rank based)
+            for rank, idx in enumerate(dense_indices_list[i]):
+                if idx not in doc_score_map:
+                    doc_score_map[idx] = 0
+                doc_score_map[idx] += 1 / (
+                    k + rank + 1
+                )  # TODO: [Sparse:Dense] Weight 여기서 조절 가능
+
+            # Sort by fused
+            sorted_docs = sorted(
+                doc_score_map.items(), key=lambda x: x[1], reverse=True
+            )[:topk]
+            final_indices = [x[0] for x in sorted_docs]
+
+            # Final docs construct
+            context = "\n\n".join([self.texts[idx] for idx in final_indices])
+
+            tmp = {
+                "question": query,
+                "id": (
+                    query_or_dataset[i]["id"]
+                    if isinstance(query_or_dataset, Dataset)
+                    else i
+                ),
+                "context": context,
+            }
+
+            if (
+                isinstance(query_or_dataset, Dataset)
+                and "answer" in query_or_dataset.features
             ):
-                retrieved_docs = self.retriever.invoke(query)
+                tmp["answer"] = query_or_dataset[i]["answer"]
 
-                context = "\n".join([doc.page_content for doc in retrieved_docs])
-
-                tmp = {
-                    "question": query,
-                    "id": query_or_dataset[idx]["id"],
-                    "context": context,
-                }
-
-                if (
-                    "context" in query_or_dataset.features
-                    and "answers" in query_or_dataset.features
-                ):
-                    tmp["original_context"] = query_or_dataset[idx]["context"]
-                    tmp["answers"] = query_or_dataset[idx]["answers"]
-
-                total.append(tmp)
-
-            return pd.DataFrame(total)
-
-
-import torch
-
-
-if __name__ == "__main__":
-    pass
+            total_results.append(tmp)
+        return pd.DataFrame(total_results)
