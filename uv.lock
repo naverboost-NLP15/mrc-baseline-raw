@@ -11,7 +11,7 @@ resolution-markers = [
 
 [[package]]
 name = "accelerate"
-version = "0.30.0"
+version = "1.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -22,9 +22,9 @@ dependencies = [
     { name = "safetensors" },
     { name = "torch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/99/00/45552ff36c0cfb247c75520f6ce101c70a9e531c2e26ce619b3651eabde6/accelerate-0.30.0.tar.gz", hash = "sha256:0f8e103a6ced54cd40af6bb2331ec922e42269d2778038dc564d53047b1386d2", size = 299357, upload-time = "2024-05-03T14:36:34.303Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4a/8e/ac2a9566747a93f8be36ee08532eb0160558b07630a081a6056a9f89bf1d/accelerate-1.12.0.tar.gz", hash = "sha256:70988c352feb481887077d2ab845125024b2a137a5090d6d7a32b57d03a45df6", size = 398399, upload-time = "2025-11-21T11:27:46.973Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/18/e36672c1fb46d71e9a119593511e2e1eb532df462eb4d10cf3ef8f1be5e7/accelerate-0.30.0-py3-none-any.whl", hash = "sha256:cd93902dc37a49952b4b8b324c5d53776c936fcd77b4b0162cf5ce55a4fc2721", size = 302387, upload-time = "2024-05-03T14:36:32.66Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/d2/c581486aa6c4fbd7394c23c47b83fa1a919d34194e16944241daf9e762dd/accelerate-1.12.0-py3-none-any.whl", hash = "sha256:3e2091cd341423207e2f084a6654b1efcd250dc326f2a37d6dde446e07cabb11", size = 380935, upload-time = "2025-11-21T11:27:44.522Z" },
 ]
 
 [[package]]
@@ -3220,7 +3220,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "accelerate", specifier = "==0.30.0" },
+    { name = "accelerate", specifier = ">=0.31.0" },
     { name = "evaluate", specifier = "==0.4.6" },
     { name = "faiss-gpu", specifier = ">=1.7.2" },
     { name = "kiwipiepy", specifier = ">=0.22.1" },

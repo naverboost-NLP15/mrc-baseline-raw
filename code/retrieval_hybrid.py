@@ -75,7 +75,7 @@ class HybridRetrieval:
 
     def kiwi_tokenizer(self, text: str) -> list[str]:
         """
-        형태소의 품사가 명사, 동사, 형용사 등인 형태소만 추출
+        형태소의 품사가 명사, 동사, 형용사, 숫자, 외국어, 한자 등인 형태소만 추출
 
         Args:
             text (str): 원본 text
@@ -85,7 +85,13 @@ class HybridRetrieval:
         """
         tokens = self.kiwi.tokenize(text)
         return [
-            t.form for t in tokens if t.tag.startswith("N") or t.tag.startswith("V")
+            t.form
+            for t in tokens
+            if t.tag.startswith("N")
+            or t.tag.startswith("V")
+            or t.tag.startswith("SN")
+            or t.tag.startswith("SL")
+            or t.tag.startswith("SH")
         ]
 
     def get_embedding(self) -> None:
