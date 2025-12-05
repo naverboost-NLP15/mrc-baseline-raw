@@ -198,8 +198,8 @@ class HybridRetrieval:
         self,
         query_or_dataset: str | Dataset,
         topk: int = 20,
-        bm25_weight: float = 1.0,
-        dense_weight: float = 1.0,
+        bm25_weight: float = 0.5,
+        dense_weight: float = 0.5,
     ) -> pd.DataFrame:
         # TODO: Hybrid + reranker
         # reranker_model = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3")

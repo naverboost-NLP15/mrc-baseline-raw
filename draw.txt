@@ -60,3 +60,28 @@ uv run code/inference.py \
 --bm25_weight 0.5 \
 --dense_weight 0.5 
 ```
+
+uv run code/train.py \
+--output_dir code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5 \
+--do_train \
+--do_eval \
+--model_name_or_path klue/bert-base \
+--dataset_name raw/data/train_dataset \
+--per_device_train_batch_size 16 \
+--fp16 \
+--num_train_epochs 3 \
+--logging_steps 100 \
+--eval_strategy steps \
+--eval_steps 500 \
+--save_steps 500 \
+--overwrite_cache
+
+uv run code/inference.py \
+--output_dir code/predictions/baseline_hybrid_chunk_0.5_0.5 \
+--dataset_name raw/data/test_dataset/ \
+--model_name_or_path code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5 \
+--do_predict \
+--eval_retrieval \
+--top_k_retrieval 10 \
+--bm25_weight 0.5 \
+--dense_weight 0.5 

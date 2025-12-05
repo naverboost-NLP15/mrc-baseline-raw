@@ -23,3 +23,5 @@ raw/data/sparse_embedding.bin
 raw/data/tfidv.bin
 raw/data/bm25_wiki.pkl
 raw/data/faiss_intfloat_multilingual-e5-large-instruct.index
+raw/data/bm25_wiki_chunk1000_overlap100.pkl
+raw/data/faiss_intfloat_multilingual-e5-large-instruct_chunk1000_overlap100.index
