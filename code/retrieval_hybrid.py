@@ -94,12 +94,10 @@ class HybridRetrieval:
         """
 
         # sparse, dense embedding 저장 경로 설정
-        embedding_model_name_splitted = self.embedding_model_name.split("/")[1]
+        model_name_str = self.embedding_model_name.replace("/", "_")
 
         bm25_path = os.path.join(self.data_path, "bm25_wiki.pkl")
-        faiss_path = os.path.join(
-            self.data_path, f"faiss_{embedding_model_name_splitted}.index"
-        )
+        faiss_path = os.path.join(self.data_path, f"faiss_{model_name_str}.index")
 
         # Sparse(BM25) 설정
         if os.path.isfile(bm25_path):
@@ -202,8 +200,11 @@ class HybridRetrieval:
 
         # 2. Dense Search (FAISS)
         print("Dense 검색 중...")
+        #! Query에는 "query: " prefix를 붙여야 성능이 보장됨 (E5, Qwen 등)
+        dense_queries = [f"query: {q}" for q in queries]
+
         query_embeds = self.encoder.encode(
-            queries,
+            dense_queries,
             batch_size=32,
             show_progress_bar=True,
             normalize_embeddings=True,
@@ -253,8 +254,8 @@ class HybridRetrieval:
             }
 
             if isinstance(query_or_dataset, Dataset):
-                if "answer" in query_or_dataset.features:
-                    tmp["answer"] = query_or_dataset[i]["answer"]
+                if "answers" in query_or_dataset.features:
+                    tmp["answers"] = query_or_dataset[i]["answers"]
                 if "context" in query_or_dataset.features:
                     tmp["original_context"] = query_or_dataset[i]["context"]
 
