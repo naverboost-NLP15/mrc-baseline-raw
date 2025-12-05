@@ -2,7 +2,6 @@ import os
 import json
 import time
 import pickle
-from turtle import title
 import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
@@ -253,11 +252,91 @@ class HybridRetrieval:
                 "context": context,
             }
 
-            if (
-                isinstance(query_or_dataset, Dataset)
-                and "answer" in query_or_dataset.features
-            ):
-                tmp["answer"] = query_or_dataset[i]["answer"]
+            if isinstance(query_or_dataset, Dataset):
+                if "answer" in query_or_dataset.features:
+                    tmp["answer"] = query_or_dataset[i]["answer"]
+                if "context" in query_or_dataset.features:
+                    tmp["original_context"] = query_or_dataset[i]["context"]
 
             total_results.append(tmp)
         return pd.DataFrame(total_results)
+
+
+if __name__ == "__main__":
+    import argparse
+    from datasets import load_from_disk, concatenate_datasets
+
+    # Arugment 설정 (기존 retrieval.py와 호환성 유지 + Hybrid 파라미터 추가)
+    parser = argparse.ArgumentParser(description="Hybrid Retrieval Test")
+    parser.add_argument(
+        "--dataset_name",
+        metavar="./data/train_dataset",
+        type=str,
+        default="../data/train_dataset",
+        help="Path to the dataset",
+    )
+    parser.add_argument(
+        "--data_path",
+        metavar="./data",
+        type=str,
+        default="../data",
+        help="Path to the directory",
+    )
+    parser.add_argument(
+        "--context_path",
+        metavar="wikipedia_document.json",
+        type=str,
+        default="wikipedia_document.json",
+        help="Context(Document) file name",
+    )
+    parser.add_argument(
+        "--topk",
+        metavar=20,
+        type=int,
+        default=20,
+        help="Number of passages to retrieve",
+    )
+
+    args = parser.parse_args()
+
+    # 데이터셋 로드
+    print(f"Loading dataset from {args.dataset_name}...")
+    original_dataset = load_from_disk(args.dataset_name)
+    try:
+        full_ds = concatenate_datasets(
+            [
+                original_dataset["train"].flatten_indices(),
+                original_dataset["vaildation"].flatten_indices(),
+            ]
+        )
+    except KeyError:
+        # train_dataset이 아닌, tset_dataset인 경우 vaildation만 존재하므로, 예외처리
+        full_ds = original_dataset["vaildation"]
+
+    print("*" * 40, "Query Dataset Info", "*" * 40)
+    print(full_ds)
+
+    # Hybrid Retrieval 초기화
+    retrieval = HybridRetrieval(
+        tokenize_fn=None,  # 내부적으로 kiwi tokenzier 사용
+        data_path=args.data_path,
+        context_path=args.context_path,
+    )
+
+    # 임베딩 생성 또는 로드
+    retrieval.get_embedding()
+
+    # Retrieval 성능 테스트
+    # Ground Truth(original_context)가 검색된 Top-K 문서들(context) 안에 포함되어 있는지 확인.
+    with timer("Bulk query by Hybrid search"):
+        df = retrieval.retrieve(query_or_dataset=full_ds, topk=args.topk)
+
+        if "original_context" in df.columns:
+            correct_count = 0
+            for idx, row in df.iterrows():
+                if row["original_context"] in row["context"]:
+                    correct_count += 1
+            acc = correct_count / len(df)
+            print(f"Top-{args.topk} Retrieval Accuracy: {acc:.4f}")
+        else:
+            print("ground truth context가 없습니다. 성능 체크를 스킵합니다.")
