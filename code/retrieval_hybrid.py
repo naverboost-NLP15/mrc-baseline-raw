@@ -284,9 +284,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--context_path",
-        metavar="wikipedia_document.json",
+        metavar="wikipedia_documents.json",
         type=str,
-        default="wikipedia_document.json",
+        default="wikipedia_documents.json",
         help="Context(Document) file name",
     )
     parser.add_argument(
@@ -306,12 +306,12 @@ if __name__ == "__main__":
         full_ds = concatenate_datasets(
             [
                 original_dataset["train"].flatten_indices(),
-                original_dataset["vaildation"].flatten_indices(),
+                original_dataset["validation"].flatten_indices(),
             ]
         )
     except KeyError:
-        # train_dataset이 아닌, tset_dataset인 경우 vaildation만 존재하므로, 예외처리
-        full_ds = original_dataset["vaildation"]
+        # train_dataset이 아닌, tset_dataset인 경우 validation만 존재하므로, 예외처리
+        full_ds = original_dataset["validation"]
 
     print("*" * 40, "Query Dataset Info", "*" * 40)
     print(full_ds)
