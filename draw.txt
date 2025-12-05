@@ -30,3 +30,21 @@ python inference.py \
 --eval_retrieval \
 --top_k_retrieval 10
 ```
+
+```
+uv run train.py \
+--output_dir ./models/train_dataset/baseline_hybird \
+--do_train \
+--do_eval \
+--model_name_or_path klue/bert-base \
+--dataset_name ../raw/data/train_dataset \
+--per_device_train_batch_size 16 \
+--gradient_accumulation_steps 2 \
+--fp16 True \
+--num_train_epochs 3 \
+--logging_steps 100 \
+--evaluation_strategy steps \
+--eval_steps 500 \
+--save_steps 500 \
+--overwrite_cahce
+```
