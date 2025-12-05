@@ -153,6 +153,8 @@ class HybridRetrieval:
         self,
         query_or_dataset: str | Dataset,
         topk: int = 20,
+        bm25_weight: float = 1.0,
+        dense_weight: float = 1.0,
     ) -> pd.DataFrame:
         # TODO: Hybrid + reranker
         # reranker_model = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3")
@@ -230,15 +232,13 @@ class HybridRetrieval:
             for rank, idx in enumerate(bm25_indices_list[i]):
                 if idx not in doc_score_map:
                     doc_score_map[idx] = 0
-                doc_score_map[idx] += 1 / (k + rank + 1)
+                doc_score_map[idx] += bm25_weight * (1 / (k + rank + 1))
 
-            # Dense Scorcs (Rank based)
+            # Dense Scores (Rank based)
             for rank, idx in enumerate(dense_indices_list[i]):
                 if idx not in doc_score_map:
                     doc_score_map[idx] = 0
-                doc_score_map[idx] += 1 / (
-                    k + rank + 1
-                )  # TODO: [Sparse:Dense] Weight 여기서 조절 가능
+                doc_score_map[idx] += dense_weight * (1 / (k + rank + 1))
 
             # Sort by fused
             sorted_docs = sorted(
@@ -303,6 +303,20 @@ if __name__ == "__main__":
         default=20,
         help="Number of passages to retrieve",
     )
+    parser.add_argument(
+        "--bm25_weight",
+        metavar=1.0,
+        type=float,
+        default=1.0,
+        help="Weight for BM25 results",
+    )
+    parser.add_argument(
+        "--dense_weight",
+        metavar=1.0,
+        type=float,
+        default=1.0,
+        help="Weight for Dense results",
+    )
 
     args = parser.parse_args()
 
@@ -336,7 +350,12 @@ if __name__ == "__main__":
     # Retrieval 성능 테스트
     # Ground Truth(original_context)가 검색된 Top-K 문서들(context) 안에 포함되어 있는지 확인.
     with timer("Bulk query by Hybrid search"):
-        df = retriever.retrieve(query_or_dataset=full_ds, topk=args.topk)
+        df = retriever.retrieve(
+            query_or_dataset=full_ds,
+            topk=args.topk,
+            bm25_weight=args.bm25_weight,
+            dense_weight=args.dense_weight,
+        )
 
         if "original_context" in df.columns:
             correct_count = 0
