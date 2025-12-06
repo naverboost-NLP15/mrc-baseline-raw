@@ -6,13 +6,13 @@ import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
 from contextlib import contextmanager
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple
 from datasets import Dataset
 
 import torch
 from rank_bm25 import BM25Okapi
 from kiwipiepy import Kiwi
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import faiss
 
 from numpy.typing import NDArray
@@ -33,21 +33,29 @@ class HybridRetrieval:
         context_path: str = "wikipedia_documents.json",
         chunk_size: int = 1000,
         chunk_overlap: int = 100,
+        use_reranker: bool = True,
+        reranker_model_name: str = "BAAI/bge-reranker-v2-m3",
     ) -> None:
         """
-        BM25(Sparse) + FAISS(Dense)를 결합한 Hybrid Retriever
+        BM25(Sparse) + FAISS(Dense) + Reranker를 결합한 Hybrid Retriever 개선판
 
         Args:
             tokenize_fn (None): Defaults to Kiwi tokenizer
-            data_path (str | None, optional): _description_. Defaults to "./raw/data".
-            context_path (str | None, optional): _description_. Defaults to "wikipedia_documents.json".
+            data_path (str | None, optional): Defaults to "./raw/data".
+            context_path (str | None, optional): Defaults to "wikipedia_documents.json".
             chunk_size (int, optional): Chunk size. Defaults to 1000.
             chunk_overlap (int, optional): Chunk overlap. Defaults to 100.
+            use_reranker (bool): Reranker 사용 여부.
+            reranker_model_name (str): Reranker 모델 이름.
         """
         self.data_path = data_path
         self.context_path = context_path
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.use_reranker = use_reranker
+
+        # Kiwi 형태소 분석기 초기화 (Chunking에 사용하기 위해 미리 선언)
+        self.kiwi = Kiwi()
 
         # 문서 로드
         with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
@@ -70,60 +78,81 @@ class HybridRetrieval:
 
             seen_texts.add(text)
 
-            # !Chunking
+            # Chunking (Improved: 문장 단위 분리)
             chunks = self.split_text(text, self.chunk_size, self.chunk_overlap)
 
             for chunk in chunks:
                 self.texts.append(chunk)
                 self.titles.append(title)
                 self.doc_ids.append(doc_id)
-                self.ids.append(len(self.ids))  # Chunk ID (0부터 시작하는 고유 ID)
+                self.ids.append(len(self.ids))  # Chunk ID
 
         print(f"Total Chunks: {len(self.texts)}")
 
-        # Kiwi 형태소 분석기
-        self.kiwi = Kiwi()
         # Dense Model Load
-        self.embedding_model_name = (
-            "intfloat/multilingual-e5-large-instruct"  # TODO: Fix Embedding Model
-        )
+        self.embedding_model_name = "intfloat/multilingual-e5-large-instruct"
         self.encoder = SentenceTransformer(self.embedding_model_name)
+
+        # Reranker Load
+        self.reranker = None
+        if self.use_reranker:
+            print(f"Loading Reranker ({reranker_model_name})...")
+            self.reranker = CrossEncoder(reranker_model_name)
 
         self.bm25 = None
         self.faiss_index = None
 
     def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
         """
-        텍스트를 공백 기준으로 나누어 Chunking합니다.
+        Kiwi를 사용하여 문장 단위로 분리한 뒤, chunk_size(글자 수) 제한에 맞춰 병합합니다.
+        Overlap을 적용하여 문맥 단절을 방지합니다.
         """
         if not text:
             return []
 
-        words = text.split()
-        if len(words) <= chunk_size:
-            return [text]
+        # 문장 분리
+        try:
+            sents = [s.text for s in self.kiwi.split_into_sents(text)]
+        except Exception:
+            sents = text.split(". ")
 
         chunks = []
-        start = 0
-        while start < len(words):
-            end = min(start + chunk_size, len(words))
-            chunk = " ".join(words[start:end])
-            chunks.append(chunk)
-            if end == len(words):
-                break
-            start += chunk_size - chunk_overlap
+        current_chunk = []
+        current_len = 0
+
+        for sent in sents:
+            # 글자 수 기준 (기존 word count -> character count로 변경)
+            sent_len = len(sent)
+
+            if current_len + sent_len > chunk_size:
+                if current_chunk:
+                    chunks.append(" ".join(current_chunk))
+
+                # Overlap 적용: 이전 문장들을 역순으로 탐색하여 overlap 크기만큼 가져옴
+                new_chunk = []
+                new_len = 0
+
+                for prev_sent in reversed(current_chunk):
+                    if new_len + len(prev_sent) > chunk_overlap:
+                        break
+                    new_chunk.insert(0, prev_sent)
+                    new_len += len(prev_sent)
+
+                # 새 청크 시작 (Overlap 된 부분 + 현재 문장)
+                current_chunk = new_chunk + [sent]
+                current_len = new_len + sent_len
+            else:
+                current_chunk.append(sent)
+                current_len += sent_len
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
 
         return chunks
 
     def kiwi_tokenizer(self, text: str) -> list[str]:
         """
         형태소의 품사가 명사, 동사, 형용사, 숫자, 외국어, 한자 등인 형태소만 추출
-
-        Args:
-            text (str): 원본 text
-
-        Returns:
-            list[str]: 추출된 형태소 Tokens
         """
         tokens = self.kiwi.tokenize(text)
         return [
@@ -140,10 +169,10 @@ class HybridRetrieval:
         """
         BM25 Retriever와 Dense Retriever를 생성하거나 로드하여 Ensemble Retriever를 구축
         """
-
-        # sparse, dense embedding 저장 경로 설정 (Chunk 정보 포함)
+        # sparse, dense embedding 저장 경로 설정
+        # _v2 suffix를 붙여 기존 인덱스와 충돌 방지 및 새 로직 적용
         model_name_str = self.embedding_model_name.replace("/", "_")
-        chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}"
+        chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}_v2"
 
         bm25_path = os.path.join(self.data_path, f"bm25_wiki{chunk_suffix}.pkl")
         faiss_path = os.path.join(
@@ -155,11 +184,8 @@ class HybridRetrieval:
             print("BM25 retriever 로딩 중...")
             with open(bm25_path, "rb") as f:
                 self.bm25 = pickle.load(f)
-
         else:
             print("BM25 retriever 구축 중...")
-            # text + title로 합쳐서 인덱싱합니다.
-
             tokenized_corpus = [
                 self.kiwi_tokenizer(tit + " " + txt)
                 for tit, txt in zip(self.titles, self.texts)
@@ -171,25 +197,21 @@ class HybridRetrieval:
             print("BM25 retriever saved.")
 
         # Dense 설정
-
         if os.path.exists(faiss_path):
             print("FAISS index 로딩 중...")
             self.faiss_index = faiss.read_index(faiss_path)
         else:
             print("FAISS index 구축 중...")
-            # vectorstore = FAISS.from_documents(self.documents, hf)
             docs = [f"{tit}\n{txt}" for tit, txt in zip(self.titles, self.texts)]
             embeddings = self.encoder.encode(
                 sentences=docs,
-                batch_size=8,
+                batch_size=32,  # Batch size 증가
                 show_progress_bar=True,
                 normalize_embeddings=True,
             )
 
             dim = embeddings.shape[1]
-            self.faiss_index = faiss.IndexFlatIP(
-                dim
-            )  # Inner Product (Cosine Similarity because normalized)
+            self.faiss_index = faiss.IndexFlatIP(dim)
             self.faiss_index.add(embeddings)
             faiss.write_index(self.faiss_index, faiss_path)
             print("FAISS index 저장이 완료되었습니다.")
@@ -201,77 +223,58 @@ class HybridRetrieval:
         bm25_weight: float = 0.5,
         dense_weight: float = 0.5,
     ) -> pd.DataFrame:
-        # TODO: Hybrid + reranker
-        # reranker_model = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3")
-        # compressor = CrossEncoderReranker(model=reranker_model, top_n=3)
-        # compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=ensemble_retriever)
-        # TODO: Langchain의 Ensemble Retriever는 RRF + Weight를 사용, 우리도 Weight 도입이 필요.
-
         """
-        Hybrid Search 수행 함수
-
-        Args:
-            query_or_dataset (str | Dataset):
-                str이나 Dataset으로 이루어진 Query를 받습니다.
-                str 형태인 하나의 query만 받으면 langchain의 `retriever.invoke`를 통해 유사도를 구합니다.
-                Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
-                이 경우, 다수의 query를 처리하기 위해 for 루프를 통해 여러 번 invoke를 호출하며, 얻은 docs를 total 리스트에 저장합니다.
-            topk (int = 20): 상위 k개의 문서를 반환합니다.
-
-        Returns:
-            pd.DataFrame: _description_
+        Hybrid Search 수행 함수 (Candidate Expansion -> Fusion -> Reranking)
         """
-
         assert (
             self.bm25 is not None and self.faiss_index is not None
         ), "get_embedding() 이 먼저 호출되어야 합니다."
 
         if isinstance(query_or_dataset, str):
             queries = [query_or_dataset]
-
         elif isinstance(query_or_dataset, Dataset):
             queries = query_or_dataset["question"]
-
         else:
-            queries = query_or_dataset  # list
+            queries = query_or_dataset
 
         total_results = []
 
+        # 1. Candidate Expansion: 최종 topk보다 더 많은 후보를 검색
+        candidate_topk = min(len(self.ids), topk * 5)
+        if candidate_topk < 50:
+            candidate_topk = 50
+
         # 1. Sparse Search (BM25)
-        print("Sparse 검색 중...")
-        bm25_scores_list: list[NDArray[np.float64]] | list = []
-        bm25_indices_list: list[NDArray[np.int64]] | list = []
+        print(f"Sparse 검색 중 (Top-{candidate_topk})...")
+        bm25_scores_list = []
+        bm25_indices_list = []
 
         for query in tqdm(queries, desc="BM25"):
             tokenized_query = self.kiwi_tokenizer(query)
             scores = self.bm25.get_scores(tokenized_query)
-
-            # Top-k 인덱스만 뽑아옵니다.
-            topk_indices = np.argsort(scores)[::-1][:topk]
+            topk_indices = np.argsort(scores)[::-1][:candidate_topk]
             bm25_scores_list.append(scores[topk_indices])
             bm25_indices_list.append(topk_indices)
 
         # 2. Dense Search (FAISS)
-        print("Dense 검색 중...")
-        #! Query에는 "query: " prefix를 붙여야 성능이 보장됨 (E5, Qwen 등)
+        print(f"Dense 검색 중 (Top-{candidate_topk})...")
         dense_queries = [f"query: {q}" for q in queries]
-
         query_embeds = self.encoder.encode(
             dense_queries,
-            batch_size=8,
+            batch_size=32,
             show_progress_bar=True,
             normalize_embeddings=True,
         )
         dense_scores_list, dense_indices_list = self.faiss_index.search(
-            query_embeds, topk
+            query_embeds, candidate_topk
         )
 
-        # 3. Fusion
-        print("Fusing...")
-        k = 60  # 보통 60이 쓰임.
+        # 3. Fusion (Weighted RRF) & Reranking
+        print("Fusing & Reranking...")
+        k = 60
 
-        for i, query in enumerate(tqdm(queries, desc="Fusion")):
-            doc_score_map: dict[int, float] = {}
+        for i, query in enumerate(tqdm(queries, desc="Fusion & Rerank")):
+            doc_score_map = {}
 
             # Sparse Scores (Rank based)
             for rank, idx in enumerate(bm25_indices_list[i]):
@@ -285,13 +288,43 @@ class HybridRetrieval:
                     doc_score_map[idx] = 0
                 doc_score_map[idx] += dense_weight * (1 / (k + rank + 1))
 
-            # Sort by fused
+            # Sort by fused score
             sorted_docs = sorted(
                 doc_score_map.items(), key=lambda x: x[1], reverse=True
-            )[:topk]
-            final_indices = [x[0] for x in sorted_docs]
+            )
 
-            # Final docs construct
+            # Reranking 후보군 선정 (예: 상위 50개)
+            rerank_candidates_count = min(len(sorted_docs), 50)
+            rerank_candidates = sorted_docs[:rerank_candidates_count]
+
+            final_indices = []
+
+            if self.use_reranker and self.reranker:
+                # CrossEncoder 입력 생성: (Query, Document Title + Text)
+                pairs = []
+                candidate_indices = [x[0] for x in rerank_candidates]
+
+                for idx in candidate_indices:
+                    doc_text = f"{self.titles[idx]} {self.texts[idx]}"
+                    pairs.append([query, doc_text])
+
+                # Reranking 점수 계산
+                rerank_scores = self.reranker.predict(pairs)
+
+                # 점수 기준 재정렬
+                reranked_results = sorted(
+                    zip(candidate_indices, rerank_scores),
+                    key=lambda x: x[1],
+                    reverse=True,
+                )
+
+                # 최종 Top-K 추출
+                final_indices = [x[0] for x in reranked_results[:topk]]
+            else:
+                # Reranker 미사용 시 RRF 결과 그대로 사용
+                final_indices = [x[0] for x in rerank_candidates[:topk]]
+
+            # 최종 Context 생성
             context = "\n\n".join([self.texts[idx] for idx in final_indices])
 
             tmp = {
@@ -311,6 +344,7 @@ class HybridRetrieval:
                     tmp["original_context"] = query_or_dataset[i]["context"]
 
             total_results.append(tmp)
+
         return pd.DataFrame(total_results)
 
 
@@ -318,54 +352,24 @@ if __name__ == "__main__":
     import argparse
     from datasets import load_from_disk, concatenate_datasets
 
-    # Arugment 설정 (기존 retrieval.py와 호환성 유지 + Hybrid 파라미터 추가)
-    parser = argparse.ArgumentParser(description="Hybrid Retrieval Test")
+    parser = argparse.ArgumentParser(description="Hybrid Retrieval Test (Example)")
+    parser.add_argument("--dataset_name", type=str, default="raw/data/train_dataset")
+    parser.add_argument("--data_path", type=str, default="raw/data")
+    parser.add_argument("--context_path", type=str, default="wikipedia_documents.json")
+    parser.add_argument("--topk", type=int, default=20)
+    parser.add_argument("--bm25_weight", type=float, default=0.5)
+    parser.add_argument("--dense_weight", type=float, default=0.5)
+    parser.add_argument("--use_reranker", action="store_true", help="Use Reranker")
     parser.add_argument(
-        "--dataset_name",
-        metavar="./data/train_dataset",
-        type=str,
-        default="raw/data/train_dataset",
-        help="Path to the dataset",
+        "--no_reranker",
+        action="store_false",
+        dest="use_reranker",
+        help="Disable Reranker",
     )
-    parser.add_argument(
-        "--data_path",
-        metavar="./data",
-        type=str,
-        default="raw/data",
-        help="Path to the directory",
-    )
-    parser.add_argument(
-        "--context_path",
-        metavar="wikipedia_documents.json",
-        type=str,
-        default="wikipedia_documents.json",
-        help="Context(Document) file name",
-    )
-    parser.add_argument(
-        "--topk",
-        metavar=20,
-        type=int,
-        default=20,
-        help="Number of passages to retrieve",
-    )
-    parser.add_argument(
-        "--bm25_weight",
-        metavar=1.0,
-        type=float,
-        default=1.0,
-        help="Weight for BM25 results",
-    )
-    parser.add_argument(
-        "--dense_weight",
-        metavar=1.0,
-        type=float,
-        default=1.0,
-        help="Weight for Dense results",
-    )
+    parser.set_defaults(use_reranker=True)
 
     args = parser.parse_args()
 
-    # 데이터셋 로드
     print(f"Loading dataset from {args.dataset_name}...")
     original_dataset = load_from_disk(args.dataset_name)
     try:
@@ -376,24 +380,20 @@ if __name__ == "__main__":
             ]
         )
     except KeyError:
-        # train_dataset이 아닌, tset_dataset인 경우 validation만 존재하므로, 예외처리
         full_ds = original_dataset["validation"]
 
     print("*" * 40, "Query Dataset Info", "*" * 40)
     print(full_ds)
 
-    # Hybrid Retrieval 초기화
     retriever = HybridRetrieval(
-        tokenize_fn=None,  # 내부적으로 kiwi tokenzier 사용
+        tokenize_fn=None,
         data_path=args.data_path,
         context_path=args.context_path,
+        use_reranker=args.use_reranker,
     )
 
-    # 임베딩 생성 또는 로드
     retriever.get_embedding()
 
-    # Retrieval 성능 테스트
-    # Ground Truth(original_context)가 검색된 Top-K 문서들(context) 안에 포함되어 있는지 확인.
     with timer("Bulk query by Hybrid search"):
         df = retriever.retrieve(
             query_or_dataset=full_ds,
@@ -412,7 +412,6 @@ if __name__ == "__main__":
         else:
             print("ground truth context가 없습니다. 성능 체크를 스킵합니다.")
 
-    # Single Query Test
     test_query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
     print(f"\n[Test Single Query]: {test_query}")
     res_df = retriever.retrieve(test_query, topk=5)
