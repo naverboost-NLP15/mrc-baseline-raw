@@ -84,7 +84,7 @@ class HybridRetrieval:
         # Kiwi 형태소 분석기
         self.kiwi = Kiwi()
         # Dense Model Load
-        self.embedding_model_name = "dragonkue/snowflake-arctic-embed-l-v2.0-ko"  # TODO: Testing Embedding Model...
+        self.embedding_model_name = "telepix/PIXIE-Rune-Preview"
         self.encoder = SentenceTransformer(self.embedding_model_name)
 
         self.bm25 = None
@@ -251,14 +251,13 @@ class HybridRetrieval:
 
         # 2. Dense Search (FAISS)
         print("Dense 검색 중...")
-        #! Query에는 "query: " prefix를 붙여야 성능이 보장됨 (E5, Qwen 등)
-        dense_queries = [f"query: {q}" for q in queries]
-
+        
         query_embeds = self.encoder.encode(
-            dense_queries,
+            queries,
             batch_size=8,
             show_progress_bar=True,
             normalize_embeddings=True,
+            prompt_name="query",
         )
         dense_scores_list, dense_indices_list = self.faiss_index.search(
             query_embeds, topk
