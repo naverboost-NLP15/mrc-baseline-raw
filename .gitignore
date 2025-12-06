@@ -25,3 +25,5 @@ raw/data/bm25_wiki.pkl
 raw/data/faiss_intfloat_multilingual-e5-large-instruct.index
 raw/data/bm25_wiki_chunk1000_overlap100.pkl
 raw/data/faiss_intfloat_multilingual-e5-large-instruct_chunk1000_overlap100.index
+
+raw/data/faiss_dragonkue_snowflake-arctic-embed-l-v2.0-ko_chunk1000_overlap100.index

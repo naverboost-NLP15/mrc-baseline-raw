@@ -19,6 +19,7 @@ dependencies = [
     "scikit-learn>=1.7.2",
     "seaborn>=0.13.2",
     "sentence-transformers>=5.1.2",
+    "slack-bolt>=1.27.0",
     "transformers>=4.42.0",
 ]
 

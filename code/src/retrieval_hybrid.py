@@ -84,9 +84,7 @@ class HybridRetrieval:
         # Kiwi 형태소 분석기
         self.kiwi = Kiwi()
         # Dense Model Load
-        self.embedding_model_name = (
-            "intfloat/multilingual-e5-large"  # TODO: Testing Embedding Model...
-        )
+        self.embedding_model_name = "dragonkue/snowflake-arctic-embed-l-v2.0-ko"  # TODO: Testing Embedding Model...
         self.encoder = SentenceTransformer(self.embedding_model_name)
 
         self.bm25 = None
@@ -315,6 +313,10 @@ class HybridRetrieval:
 
 
 if __name__ == "__main__":
+    from utils import SlackLogger
+
+    logger = SlackLogger()
+
     import argparse
     from datasets import load_from_disk, concatenate_datasets
 
@@ -366,6 +368,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 데이터셋 로드
+    logger.send("실험 시작")
     print(f"Loading dataset from {args.dataset_name}...")
     original_dataset = load_from_disk(args.dataset_name)
     try:
@@ -418,3 +421,4 @@ if __name__ == "__main__":
     res_df = retriever.retrieve(test_query, topk=5)
     print("Result Context Sample:")
     print(res_df.iloc[0]["context"])
+    print("실험 종료")
