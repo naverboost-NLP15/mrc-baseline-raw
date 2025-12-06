@@ -359,14 +359,34 @@ class HybridRetrieval:
                 if "context" in query_or_dataset.features:
                     tmp["original_context"] = query_or_dataset[i]["context"]
 
+            # Final docs construct
+            context = "\n\n".join([self.texts[idx] for idx in final_indices])
+            retrieved_doc_ids = [self.doc_ids[idx] for idx in final_indices]
+
+            tmp = {
+                "question": query,
+                "id": (
+                    query_or_dataset[i]["id"]
+                    if isinstance(query_or_dataset, Dataset)
+                    else i
+                ),
+                "context": context,
+                "retrieved_doc_ids": retrieved_doc_ids,
+            }
+
+            if isinstance(query_or_dataset, Dataset):
+                if "answers" in query_or_dataset.features:
+                    tmp["answers"] = query_or_dataset[i]["answers"]
+                if "context" in query_or_dataset.features:
+                    tmp["original_context"] = query_or_dataset[i]["context"]
+                if "document_id" in query_or_dataset.features:
+                    tmp["original_document_id"] = query_or_dataset[i]["document_id"]
+
             total_results.append(tmp)
         return pd.DataFrame(total_results)
 
 
 if __name__ == "__main__":
-    from utils import SlackLogger
-
-    logger = SlackLogger()
 
     import argparse
     from datasets import load_from_disk, concatenate_datasets
@@ -419,7 +439,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 데이터셋 로드
-    logger.send("실험 시작")
     print(f"Loading dataset from {args.dataset_name}...")
     original_dataset = load_from_disk(args.dataset_name)
     try:
@@ -456,13 +475,24 @@ if __name__ == "__main__":
             dense_weight=args.dense_weight,
         )
 
-        if "original_context" in df.columns:
+        if "original_document_id" in df.columns:
+            correct_count = 0
+            for idx, row in df.iterrows():
+                # !Chunking이 되었으므로, 원본 문서 ID가 검색된 문서 ID 목록에 있는지 확인해야 함
+                if row["original_document_id"] in row["retrieved_doc_ids"]:
+                    correct_count += 1
+            acc = correct_count / len(df)
+            print(f"Top-{args.topk} Retrieval Accuracy: {acc:.4f}")
+        elif (
+            "original_context" in df.columns
+        ):  # document_id가 없는 경우 (혹시 모를 하위 호환성)
             correct_count = 0
             for idx, row in df.iterrows():
                 if row["original_context"] in row["context"]:
                     correct_count += 1
             acc = correct_count / len(df)
-            print(f"Top-{args.topk} Retrieval Accuracy: {acc:.4f}")
+            print(f"Top-{args.topk} Retrieval Accuracy (Text Match): {acc:.4f}")
+
         else:
             print("ground truth context가 없습니다. 성능 체크를 스킵합니다.")
 
