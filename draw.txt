@@ -61,8 +61,8 @@ uv run code/inference.py \
 --dense_weight 0.5 
 ```
 
-uv run code/train.py \
---output_dir code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5 \
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5_v2 \
 --do_train \
 --do_eval \
 --model_name_or_path klue/bert-base \
@@ -77,10 +77,10 @@ uv run code/train.py \
 --eval_retrieval \
 --overwrite_cache
 
-uv run code/inference.py \
---output_dir code/predictions/baseline_hybrid_chunk_0.5_0.5 \
+uv run code/src/inference.py \
+--output_dir code/predictions/baseline_hybrid_chunk_0.5_0.5_v2 \
 --dataset_name raw/data/test_dataset/ \
---model_name_or_path code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5 \
+--model_name_or_path code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5_v2 \
 --do_predict \
 --eval_retrieval \
 --top_k_retrieval 10 \

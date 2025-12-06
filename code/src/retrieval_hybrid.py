@@ -14,6 +14,7 @@ from rank_bm25 import BM25Okapi
 from kiwipiepy import Kiwi
 from sentence_transformers import SentenceTransformer, CrossEncoder
 import faiss
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from numpy.typing import NDArray
 
@@ -106,93 +107,32 @@ class HybridRetrieval:
 
     def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
         """
-        text를 문장 단위로 분리한 후, 글자 수를 기준으로 chunking을 진행합니다. \n
+        text를 문장 단위로 분리한 후, RecursiveCharacterTextSplitter를 사용하여 chunking을 진행합니다.
         (문장 분리로 Kiwi Tokenizer를 사용합니다.)
         """
         if not text:
             return []
 
-        # 문장 분리
+        # 1. Kiwi로 문장 단위 분리 (한국어 문맥 보존)
         try:
-            sents = [sent.text for sent in self.kiwi.split_into_sents(text)]  # type: ignore
+            # type: ignore
+            sents = [sent.text for sent in self.kiwi.split_into_sents(text)]
         except Exception:
             sents = text.split(". ")
 
-        chunks = []
-        current_chunk = []
-        current_len = 0
+        # 2. 문장들을 다시 합치되, 확실한 구분자(\n\n) 사용
+        preprocessed_text = "\n\n".join(sents)
 
-        for sent in sents:
-            sent_len = len(sent)
+        # 3. RecursiveCharacterTextSplitter 사용
+        # separators를 설정하여 우리가 넣은 구분자(\n\n)를 최우선으로 자르도록 유도
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            separators=["\n\n", "\n", " ", ""],  # 문장 단위(\n\n) 우선 분할 시도
+            length_function=len,
+        )
 
-            # 1. 문장 자체가 chunk_size보다 클 경우 (강제 분할 필요)
-            if sent_len > chunk_size:
-                # 1-1. 현재까지 쌓인 chunk가 있다면 먼저 저장
-                if current_chunk:
-                    chunks.append(" ".join(current_chunk))
-                    current_chunk = []
-                    current_len = 0
-
-                # 1-2. 긴 문장을 stride(chunk_size - chunk_overlap) 간격으로 자름
-                for i in range(0, sent_len, chunk_size - chunk_overlap):
-                    segment = sent[i : i + chunk_size]
-                    chunks.append(segment)
-
-                # 1-3. 긴 문장의 뒷부분을 다음 chunk의 overlap으로 사용하기 위해 current_chunk에 추가
-                # 문맥 보존을 위해 마지막 'chunk_overlap' 길이만큼을 가져옵니다.
-                tail_len = min(chunk_overlap, sent_len)
-                tail_part = sent[-tail_len:]
-
-                current_chunk = [tail_part]
-                current_len = tail_len
-                continue
-
-            # 2. 문장을 추가했을 때 chunk_size를 초과하는 경우
-            # 공백 길이(1)를 고려하여 계산
-            added_len = (1 if current_len > 0 else 0) + sent_len
-
-            if current_len + added_len > chunk_size:
-                chunks.append(" ".join(current_chunk))
-
-                # Overlap 로직: 이전 청크의 뒷부분 문장들을 가져옴
-                new_chunk = []
-                new_len = 0
-
-                # 뒤에서부터 문장을 하나씩 추가하며 overlap 크기를 맞춤
-                for prev_sent in reversed(current_chunk):
-                    prev_len = len(prev_sent)
-                    # 공백 고려
-                    needed_len = (1 if new_len > 0 else 0) + prev_len
-
-                    if new_len + needed_len > chunk_overlap:
-                        # new_chunk가 비어있다면(직전 문장이 너무 길다면) 그거라도 넣어야 함
-                        if not new_chunk:
-                            new_chunk.append(prev_sent)
-                            new_len += prev_len
-                        break
-
-                    new_chunk.append(prev_sent)
-                    new_len += needed_len
-
-                # 순서 복원 (뒤에서부터 넣었으므로)
-                new_chunk.reverse()
-
-                # 새 문장 추가
-                current_chunk = new_chunk + [sent]
-
-                # current_len 갱신 (공백 포함 정확한 길이 계산)
-                current_len = sum(len(s) for s in current_chunk) + (
-                    len(current_chunk) - 1
-                )
-
-            else:
-                current_chunk.append(sent)
-                current_len += added_len
-
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-
-        return chunks
+        return text_splitter.split_text(preprocessed_text)
 
     def kiwi_tokenizer(self, text: str) -> list[str]:
         """
@@ -480,15 +420,15 @@ if __name__ == "__main__":
             for idx, row in df.iterrows():
                 # 방식 B: 검색된 Context 안에 실제 정답 텍스트가 포함되어 있는지 확인
                 # answers는 {'text': ['정답1', '정답2'], 'answer_start': [10]} 형태
-                answer_texts = row['answers']['text']
-                if any(ans in row['context'] for ans in answer_texts):
+                answer_texts = row["answers"]["text"]
+                if any(ans in row["context"] for ans in answer_texts):
                     correct_count += 1
-            
+
             acc = correct_count / len(df)
             print(f"Top-{args.topk} Retrieval Accuracy (Answer Match): {acc:.4f}")
-            
+
         elif "original_document_id" in df.columns:
-             # Test 데이터셋처럼 정답이 없고 문서 ID만 있는 경우 (혹은 호환성 유지)
+            # Test 데이터셋처럼 정답이 없고 문서 ID만 있는 경우 (혹은 호환성 유지)
             correct_count = 0
             for idx, row in df.iterrows():
                 if row["original_document_id"] in row["retrieved_doc_ids"]:
