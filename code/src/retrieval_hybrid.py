@@ -251,7 +251,7 @@ class HybridRetrieval:
 
         # 2. Dense Search (FAISS)
         print("Dense 검색 중...")
-        
+
         query_embeds = self.encoder.encode(
             queries,
             batch_size=8,

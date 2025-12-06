@@ -103,14 +103,10 @@ class HybridRetrieval:
         self.faiss_index = None
 
     def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
-        """
-        Kiwi를 사용하여 문장 단위로 분리한 뒤, chunk_size(글자 수) 제한에 맞춰 병합합니다.
-        Overlap을 적용하여 문맥 단절을 방지합니다.
-        """
         if not text:
             return []
 
-        # 문장 분리
+        # 1. 문장 분리 (Kiwi 사용, 실패 시 단순 split)
         try:
             sents = [s.text for s in self.kiwi.split_into_sents(text)]
         except Exception:
@@ -121,26 +117,55 @@ class HybridRetrieval:
         current_len = 0
 
         for sent in sents:
-            # 글자 수 기준 (기존 word count -> character count로 변경)
             sent_len = len(sent)
 
-            if current_len + sent_len > chunk_size:
+            # [예외 처리] 만약 문장 자체가 chunk_size보다 크다면? -> 강제로 자름 (Hard Slicing)
+            if sent_len > chunk_size:
+                # 현재 쌓인 게 있다면 먼저 처리
                 if current_chunk:
                     chunks.append(" ".join(current_chunk))
+                    current_chunk = []
+                    current_len = 0
 
-                # Overlap 적용: 이전 문장들을 역순으로 탐색하여 overlap 크기만큼 가져옴
+                # 긴 문장을 강제로 조각냄
+                for i in range(0, sent_len, chunk_size - chunk_overlap):
+                    chunks.append(sent[i : i + chunk_size])
+
+                # 강제 분할된 마지막 조각을 overlap용으로 남길지는 선택 (여기선 생략)
+                continue
+
+            # Chunk 크기 초과 시 저장 후 새 Chunk 시작
+            if current_len + sent_len > chunk_size:
+                chunks.append(" ".join(current_chunk))
+
+                # [수정된 Overlap 로직]
+                # 이전 문장들을 역순으로 가져오되, 최소한 문장 일부라도 잘라서 Overlap을 확보할 것인지,
+                # 아니면 문장 단위 유지를 위해 Overlap을 포기할지 결정해야 함.
+                # 여기서는 "문장 단위 유지"를 위해 최대한 채우되,
+                # ***직전 문장이 너무 길어도 최소한 하나는 넣도록*** 수정하거나
+                # 혹은 작성하신대로 두되, Risk를 인지해야 함.
+
                 new_chunk = []
                 new_len = 0
-
                 for prev_sent in reversed(current_chunk):
+                    # 수정 제안: overlap을 조금 넘더라도 최소 1개는 포함하거나,
+                    # 엄격하게 지키려면 여기서 멈춤.
+                    # 작성하신 코드는 '엄격하게 지킴' -> Overlap 0 가능성 있음.
+
                     if new_len + len(prev_sent) > chunk_overlap:
+                        # 만약 new_chunk가 비어있다면(직전 문장이 overlap보다 큼),
+                        # 강제로라도 하나는 넣는 게 안전할 수 있음.
+                        if not new_chunk:
+                            new_chunk.insert(
+                                0, prev_sent
+                            )  # Overlap 한도를 넘더라도 문맥 연결 우선
                         break
                     new_chunk.insert(0, prev_sent)
                     new_len += len(prev_sent)
 
-                # 새 청크 시작 (Overlap 된 부분 + 현재 문장)
                 current_chunk = new_chunk + [sent]
                 current_len = new_len + sent_len
+
             else:
                 current_chunk.append(sent)
                 current_len += sent_len
