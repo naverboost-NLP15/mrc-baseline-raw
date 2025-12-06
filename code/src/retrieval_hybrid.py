@@ -475,26 +475,29 @@ if __name__ == "__main__":
             dense_weight=args.dense_weight,
         )
 
-        if "original_document_id" in df.columns:
+        if "answers" in df.columns:
             correct_count = 0
             for idx, row in df.iterrows():
-                # !Chunking이 되었으므로, 원본 문서 ID가 검색된 문서 ID 목록에 있는지 확인해야 함
+                # 방식 B: 검색된 Context 안에 실제 정답 텍스트가 포함되어 있는지 확인
+                # answers는 {'text': ['정답1', '정답2'], 'answer_start': [10]} 형태
+                answer_texts = row['answers']['text']
+                if any(ans in row['context'] for ans in answer_texts):
+                    correct_count += 1
+            
+            acc = correct_count / len(df)
+            print(f"Top-{args.topk} Retrieval Accuracy (Answer Match): {acc:.4f}")
+            
+        elif "original_document_id" in df.columns:
+             # Test 데이터셋처럼 정답이 없고 문서 ID만 있는 경우 (혹은 호환성 유지)
+            correct_count = 0
+            for idx, row in df.iterrows():
                 if row["original_document_id"] in row["retrieved_doc_ids"]:
                     correct_count += 1
             acc = correct_count / len(df)
-            print(f"Top-{args.topk} Retrieval Accuracy: {acc:.4f}")
-        elif (
-            "original_context" in df.columns
-        ):  # document_id가 없는 경우 (혹시 모를 하위 호환성)
-            correct_count = 0
-            for idx, row in df.iterrows():
-                if row["original_context"] in row["context"]:
-                    correct_count += 1
-            acc = correct_count / len(df)
-            print(f"Top-{args.topk} Retrieval Accuracy (Text Match): {acc:.4f}")
+            print(f"Top-{args.topk} Retrieval Accuracy (Doc ID Match): {acc:.4f}")
 
         else:
-            print("ground truth context가 없습니다. 성능 체크를 스킵합니다.")
+            print("ground truth info가 없습니다. 성능 체크를 스킵합니다.")
 
     # Single Query Test
     test_query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
