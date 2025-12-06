@@ -155,7 +155,7 @@ class HybridRetrieval:
         """
         # sparse, dense embedding 저장 경로 설정 (Chunk 정보 포함)
         model_name_str = self.embedding_model_name.replace("/", "_")
-        chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}_v2"
+        chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}_v3"
 
         bm25_path = os.path.join(self.data_path, f"bm25_wiki{chunk_suffix}.pkl")
         faiss_path = os.path.join(

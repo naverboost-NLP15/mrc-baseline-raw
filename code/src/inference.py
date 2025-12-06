@@ -155,6 +155,8 @@ def run_retrieval(
                 "question": Value(dtype="string", id=None),
             }
         )
+    
+    df = df[list(f.keys())]
     datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
     return datasets
 
