@@ -6,13 +6,13 @@ import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
 from contextlib import contextmanager
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple
 from datasets import Dataset
 
 import torch
 from rank_bm25 import BM25Okapi
 from kiwipiepy import Kiwi
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import faiss
 
 from numpy.typing import NDArray
@@ -33,6 +33,7 @@ class HybridRetrieval:
         context_path: str = "wikipedia_documents.json",
         chunk_size: int = 1000,
         chunk_overlap: int = 100,
+        # TODO: Reranker Parameter 추가
     ) -> None:
         """
         BM25(Sparse) + FAISS(Dense)를 결합한 Hybrid Retriever
@@ -49,7 +50,10 @@ class HybridRetrieval:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-        # 문서 로드
+        # Kiwi 형태소 분석기
+        self.kiwi = Kiwi()
+
+        # Wikipedia 문서 로드
         with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
             wiki: dict = json.load(f)
 
@@ -70,7 +74,7 @@ class HybridRetrieval:
 
             seen_texts.add(text)
 
-            # !Chunking
+            # Chunking
             chunks = self.split_text(text, self.chunk_size, self.chunk_overlap)
 
             for chunk in chunks:
@@ -81,47 +85,77 @@ class HybridRetrieval:
 
         print(f"Total Chunks: {len(self.texts)}")
 
-        # Kiwi 형태소 분석기
-        self.kiwi = Kiwi()
         # Dense Model Load
-        self.embedding_model_name = "telepix/PIXIE-Rune-Preview"
+        self.embedding_model_name = (
+            "telepix/PIXIE-Rune-Preview"  # TODO:더 정밀한 성능 평가 필요
+        )
         self.encoder = SentenceTransformer(self.embedding_model_name)
 
         self.bm25 = None
         self.faiss_index = None
 
+        # TODO: Reranker Load
+
     def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
         """
-        텍스트를 공백 기준으로 나누어 Chunking합니다.
+        text를 문장 단위로 분리한 후, 글자 수를 기준으로 chunking을 진행합니다. \n
+        (문장 분리로 Kiwi Tokenizer를 사용합니다.)
         """
         if not text:
             return []
 
-        words = text.split()
-        if len(words) <= chunk_size:
-            return [text]
+        # 문장 분리
+        try:
+            sents = [sent.text for sent in self.kiwi.split_into_sents(text)]  # type: ignore
+        except Exception:
+            sents = text.split(". ")
 
         chunks = []
-        start = 0
-        while start < len(words):
-            end = min(start + chunk_size, len(words))
-            chunk = " ".join(words[start:end])
-            chunks.append(chunk)
-            if end == len(words):
-                break
-            start += chunk_size - chunk_overlap
+        current_chunk = []
+        current_len = 0
+
+        for sent in sents:
+            sent_len = len(sent)
+
+            # 예외: 문장이 chunk_size보다 클 경우 강제로 자릅니다.
+            if sent_len > chunk_size:
+                pass
+
+            # current chunk 크기 초과 시 chunk에 저장 후 새로 시작
+            if current_len + sent_len > chunk_size:
+                chunks.append(" ".join(current_chunk))
+
+                new_chunk = []
+                new_len = 0
+                for prev_sent in current_chunk[
+                    ::-1
+                ]:  # TODO: [::-1] 대신 deque 사용하기
+
+                    # 예외: overlap 처리할 문장이 overlap보다 더 클 경우
+                    if new_len + len(prev_sent) > chunk_overlap:
+                        if not new_chunk:
+                            new_chunk.append(prev_sent)
+                        break
+
+                    new_chunk.append(prev_sent)
+                    new_len += len(prev_sent)
+
+                # overlap 문장과 새로 들어오는 문장 병합(거꾸로 추가했으니 다시 거꾸로 돌려주고 더해주어야 함)
+                current_chunk = new_chunk[::-1] + [sent]
+                current_len = new_len + sent_len
+
+            else:
+                current_chunk.append(sent)
+                current_len += sent_len
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
 
         return chunks
 
     def kiwi_tokenizer(self, text: str) -> list[str]:
         """
         형태소의 품사가 명사, 동사, 형용사, 숫자, 외국어, 한자 등인 형태소만 추출
-
-        Args:
-            text (str): 원본 text
-
-        Returns:
-            list[str]: 추출된 형태소 Tokens
         """
         tokens = self.kiwi.tokenize(text)
         return [
@@ -156,8 +190,7 @@ class HybridRetrieval:
 
         else:
             print("BM25 retriever 구축 중...")
-            # text + title로 합쳐서 인덱싱합니다.
-
+            # ! text + title로 합쳐서 인덱싱합니다.
             tokenized_corpus = [
                 self.kiwi_tokenizer(tit + " " + txt)
                 for tit, txt in zip(self.titles, self.texts)
@@ -169,13 +202,11 @@ class HybridRetrieval:
             print("BM25 retriever saved.")
 
         # Dense 설정
-
         if os.path.exists(faiss_path):
             print("FAISS index 로딩 중...")
             self.faiss_index = faiss.read_index(faiss_path)
         else:
             print("FAISS index 구축 중...")
-            # vectorstore = FAISS.from_documents(self.documents, hf)
             docs = [f"{tit}\n{txt}" for tit, txt in zip(self.titles, self.texts)]
             embeddings = self.encoder.encode(
                 sentences=docs,
@@ -203,8 +234,6 @@ class HybridRetrieval:
         # reranker_model = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3")
         # compressor = CrossEncoderReranker(model=reranker_model, top_n=3)
         # compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=ensemble_retriever)
-        # TODO: Langchain의 Ensemble Retriever는 RRF + Weight를 사용, 우리도 Weight 도입이 필요.
-
         """
         Hybrid Search 수행 함수
 
