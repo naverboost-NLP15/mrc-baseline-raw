@@ -58,37 +58,62 @@ class HybridRetrieval:
         # Kiwi 형태소 분석기
         self.kiwi = Kiwi()
 
-        # Wikipedia 문서 로드
-        with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
-            wiki: dict = json.load(f)
+        # Chunking Cache 파일 경로
+        chunk_cache_path = os.path.join(
+            data_path, f"wiki_chunks_{chunk_size}_overlap{chunk_overlap}.pkl"
+        )
 
-        self.texts = []
-        self.titles = []
-        self.ids = []
-        self.doc_ids = []  # 원본 문서 ID
+        if os.path.isfile(chunk_cache_path):
+            print(f"Chunking Cache 로드 중... ({chunk_cache_path})")
+            with open(chunk_cache_path, "rb") as f:
+                data = pickle.load(f)
+            self.texts = data["texts"]
+            self.titles = data["titles"]
+            self.doc_ids = data["doc_ids"]
+            self.ids = data["ids"]
+            print(f"Cached Total Chunks: {len(self.texts)}")
+        else:
+            # Wikipedia 문서 로드
+            with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
+                wiki: dict = json.load(f)
 
-        # 중복 제거 및 데이터 리스트 생성 (Chunking 적용)
-        print("문서 로드 및 Chunking 중...")
-        seen_texts = set()
+            self.texts = []
+            self.titles = []
+            self.ids = []
+            self.doc_ids = []  # 원본 문서 ID
 
-        for v in tqdm(wiki.values(), desc="Processing Wiki"):
-            text, title, doc_id = v["text"], v["title"], v["document_id"]
+            # 중복 제거 및 데이터 리스트 생성 (Chunking 적용)
+            print("문서 로드 및 Chunking 중...")
+            seen_texts = set()
 
-            if text in seen_texts:
-                continue
+            for v in tqdm(wiki.values(), desc="Processing Wiki"):
+                text, title, doc_id = v["text"], v["title"], v["document_id"]
 
-            seen_texts.add(text)
+                if text in seen_texts:
+                    continue
 
-            # Chunking
-            chunks = self.split_text(text, self.chunk_size, self.chunk_overlap)
+                seen_texts.add(text)
 
-            for chunk in chunks:
-                self.texts.append(chunk)
-                self.titles.append(title)
-                self.doc_ids.append(doc_id)
-                self.ids.append(len(self.ids))  # Chunk ID (0부터 시작하는 고유 ID)
+                # Chunking
+                chunks = self.split_text(text, self.chunk_size, self.chunk_overlap)
 
-        print(f"Total Chunks: {len(self.texts)}")
+                for chunk in chunks:
+                    self.texts.append(chunk)
+                    self.titles.append(title)
+                    self.doc_ids.append(doc_id)
+                    self.ids.append(len(self.ids))  # Chunk ID (0부터 시작하는 고유 ID)
+
+            print(f"Total Chunks: {len(self.texts)}")
+
+            # Cache 저장
+            with open(chunk_cache_path, "wb") as f:
+                pickle.dump({
+                    "texts": self.texts,
+                    "titles": self.titles,
+                    "doc_ids": self.doc_ids,
+                    "ids": self.ids
+                }, f)
+            print("Chunking 결과 저장 완료")
 
         # Dense Model Load
         self.embedding_model_name = (
