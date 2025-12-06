@@ -74,6 +74,7 @@ uv run code/train.py \
 --eval_strategy steps \
 --eval_steps 500 \
 --save_steps 500 \
+--eval_retrieval \
 --overwrite_cache
 
 uv run code/inference.py \

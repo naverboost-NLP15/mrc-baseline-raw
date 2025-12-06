@@ -27,3 +27,6 @@ raw/data/bm25_wiki_chunk1000_overlap100.pkl
 raw/data/faiss_intfloat_multilingual-e5-large-instruct_chunk1000_overlap100.index
 
 raw/data/faiss_dragonkue_snowflake-arctic-embed-l-v2.0-ko_chunk1000_overlap100.index
+raw/data/faiss_BAAI_bge-m3_chunk1000_overlap100.index
+.gitignore
+raw/data/faiss_telepix_PIXIE-Rune-Preview_chunk1000_overlap100.index
