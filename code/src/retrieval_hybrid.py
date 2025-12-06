@@ -32,11 +32,12 @@ class HybridRetrieval:
         data_path: str = "./raw/data",
         context_path: str = "wikipedia_documents.json",
         chunk_size: int = 1000,
-        chunk_overlap: int = 100,
-        # TODO: Reranker Parameter 추가
+        chunk_overlap: int = 200,
+        use_reranker: bool = True,
+        reranker_model_name: str = "BAAI/bge-reranker-v2-m3",
     ) -> None:
         """
-        BM25(Sparse) + FAISS(Dense)를 결합한 Hybrid Retriever
+        Sparse + Dense + Reranker를 결합한 Hybrid Retriever
 
         Args:
             tokenize_fn (None): Defaults to Kiwi tokenizer
@@ -44,11 +45,14 @@ class HybridRetrieval:
             context_path (str | None, optional): _description_. Defaults to "wikipedia_documents.json".
             chunk_size (int, optional): Chunk size. Defaults to 1000.
             chunk_overlap (int, optional): Chunk overlap. Defaults to 100.
+            use_reranker (bool): use Reranker or not
+            reranker_model_name (str): Reranker model name
         """
         self.data_path = data_path
         self.context_path = context_path
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.use_reranker = use_reranker
 
         # Kiwi 형태소 분석기
         self.kiwi = Kiwi()
@@ -95,6 +99,10 @@ class HybridRetrieval:
         self.faiss_index = None
 
         # TODO: Reranker Load
+        self.reranker = None
+        if self.use_reranker:
+            print(f"Reranker 로딩 중...({reranker_model_name})")
+            self.reranker = CrossEncoder(reranker_model_name)
 
     def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
         """
@@ -117,36 +125,69 @@ class HybridRetrieval:
         for sent in sents:
             sent_len = len(sent)
 
-            # 예외: 문장이 chunk_size보다 클 경우 강제로 자릅니다.
+            # 1. 문장 자체가 chunk_size보다 클 경우 (강제 분할 필요)
             if sent_len > chunk_size:
-                pass
+                # 1-1. 현재까지 쌓인 chunk가 있다면 먼저 저장
+                if current_chunk:
+                    chunks.append(" ".join(current_chunk))
+                    current_chunk = []
+                    current_len = 0
 
-            # current chunk 크기 초과 시 chunk에 저장 후 새로 시작
-            if current_len + sent_len > chunk_size:
+                # 1-2. 긴 문장을 stride(chunk_size - chunk_overlap) 간격으로 자름
+                for i in range(0, sent_len, chunk_size - chunk_overlap):
+                    segment = sent[i : i + chunk_size]
+                    chunks.append(segment)
+
+                # 1-3. 긴 문장의 뒷부분을 다음 chunk의 overlap으로 사용하기 위해 current_chunk에 추가
+                # 문맥 보존을 위해 마지막 'chunk_overlap' 길이만큼을 가져옵니다.
+                tail_len = min(chunk_overlap, sent_len)
+                tail_part = sent[-tail_len:]
+
+                current_chunk = [tail_part]
+                current_len = tail_len
+                continue
+
+            # 2. 문장을 추가했을 때 chunk_size를 초과하는 경우
+            # 공백 길이(1)를 고려하여 계산
+            added_len = (1 if current_len > 0 else 0) + sent_len
+
+            if current_len + added_len > chunk_size:
                 chunks.append(" ".join(current_chunk))
 
+                # Overlap 로직: 이전 청크의 뒷부분 문장들을 가져옴
                 new_chunk = []
                 new_len = 0
-                for prev_sent in current_chunk[
-                    ::-1
-                ]:  # TODO: [::-1] 대신 deque 사용하기
 
-                    # 예외: overlap 처리할 문장이 overlap보다 더 클 경우
-                    if new_len + len(prev_sent) > chunk_overlap:
+                # 뒤에서부터 문장을 하나씩 추가하며 overlap 크기를 맞춤
+                for prev_sent in reversed(current_chunk):
+                    prev_len = len(prev_sent)
+                    # 공백 고려
+                    needed_len = (1 if new_len > 0 else 0) + prev_len
+
+                    if new_len + needed_len > chunk_overlap:
+                        # new_chunk가 비어있다면(직전 문장이 너무 길다면) 그거라도 넣어야 함
                         if not new_chunk:
                             new_chunk.append(prev_sent)
+                            new_len += prev_len
                         break
 
                     new_chunk.append(prev_sent)
-                    new_len += len(prev_sent)
+                    new_len += needed_len
 
-                # overlap 문장과 새로 들어오는 문장 병합(거꾸로 추가했으니 다시 거꾸로 돌려주고 더해주어야 함)
-                current_chunk = new_chunk[::-1] + [sent]
-                current_len = new_len + sent_len
+                # 순서 복원 (뒤에서부터 넣었으므로)
+                new_chunk.reverse()
+
+                # 새 문장 추가
+                current_chunk = new_chunk + [sent]
+
+                # current_len 갱신 (공백 포함 정확한 길이 계산)
+                current_len = sum(len(s) for s in current_chunk) + (
+                    len(current_chunk) - 1
+                )
 
             else:
                 current_chunk.append(sent)
-                current_len += sent_len
+                current_len += added_len
 
         if current_chunk:
             chunks.append(" ".join(current_chunk))
@@ -172,10 +213,9 @@ class HybridRetrieval:
         """
         BM25 Retriever와 Dense Retriever를 생성하거나 로드하여 Ensemble Retriever를 구축
         """
-
         # sparse, dense embedding 저장 경로 설정 (Chunk 정보 포함)
         model_name_str = self.embedding_model_name.replace("/", "_")
-        chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}"
+        chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}_v2"
 
         bm25_path = os.path.join(self.data_path, f"bm25_wiki{chunk_suffix}.pkl")
         faiss_path = os.path.join(
@@ -230,23 +270,8 @@ class HybridRetrieval:
         bm25_weight: float = 0.5,
         dense_weight: float = 0.5,
     ) -> pd.DataFrame:
-        # TODO: Hybrid + reranker
-        # reranker_model = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3")
-        # compressor = CrossEncoderReranker(model=reranker_model, top_n=3)
-        # compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=ensemble_retriever)
         """
-        Hybrid Search 수행 함수
-
-        Args:
-            query_or_dataset (str | Dataset):
-                str이나 Dataset으로 이루어진 Query를 받습니다.
-                str 형태인 하나의 query만 받으면 langchain의 `retriever.invoke`를 통해 유사도를 구합니다.
-                Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
-                이 경우, 다수의 query를 처리하기 위해 for 루프를 통해 여러 번 invoke를 호출하며, 얻은 docs를 total 리스트에 저장합니다.
-            topk (int = 20): 상위 k개의 문서를 반환합니다.
-
-        Returns:
-            pd.DataFrame: _description_
+        Hybrid Search + Reranking 수행 함수
         """
 
         assert (
@@ -255,10 +280,8 @@ class HybridRetrieval:
 
         if isinstance(query_or_dataset, str):
             queries = [query_or_dataset]
-
         elif isinstance(query_or_dataset, Dataset):
             queries = query_or_dataset["question"]
-
         else:
             queries = query_or_dataset  # list
 
