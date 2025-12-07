@@ -312,6 +312,7 @@ class HybridRetrieval:
             sorted_docs = sorted(doc_score_map.items(), key=lambda x: -x[1])
 
             # ! Reranking
+            # TODO: 후보군 개수 따로 변수로 관리
             rerank_candidates_count = min(len(sorted_docs), 50)
             rerank_candidates = sorted_docs[:rerank_candidates_count]
 
@@ -334,25 +335,6 @@ class HybridRetrieval:
                 final_indices = [x[0] for x in reranked_results[:topk]]
             else:
                 final_indices = [x[0] for x in rerank_candidates[:topk]]
-
-            # Final docs construct
-            context = "\n\n".join([self.texts[idx] for idx in final_indices])
-
-            tmp = {
-                "question": query,
-                "id": (
-                    query_or_dataset[i]["id"]
-                    if isinstance(query_or_dataset, Dataset)
-                    else i
-                ),
-                "context": context,
-            }
-
-            if isinstance(query_or_dataset, Dataset):
-                if "answers" in query_or_dataset.features:
-                    tmp["answers"] = query_or_dataset[i]["answers"]
-                if "context" in query_or_dataset.features:
-                    tmp["original_context"] = query_or_dataset[i]["context"]
 
             # Final docs construct
             context = "\n\n".join([self.texts[idx] for idx in final_indices])
