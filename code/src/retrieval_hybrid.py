@@ -133,7 +133,12 @@ class HybridRetrieval:
         self.reranker = None
         if self.use_reranker:
             print(f"Reranker 로딩 중...({reranker_model_name})")
-            self.reranker = CrossEncoder(reranker_model_name)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.reranker = CrossEncoder(
+                reranker_model_name,
+                device=device,
+                model_kwargs={"torch_dtype": torch.float16},
+            )
 
     def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
         """
@@ -289,6 +294,14 @@ class HybridRetrieval:
             query_embeds, topn_candidate
         )
 
+        print("Dense 검색 완료. Reranking을 위해 GPU 메모리를 정리합니다...")
+
+        self.encoder.to("cpu")  # 모델을 RAM으로 이동
+        import gc
+
+        gc.collect()  # Python 가비지 컬렉터 실행
+        torch.cuda.empty_cache()  # GPU 캐시 메모리 비우기
+
         # 3. Fusion
         print("Fusing...")
         k = 60  # 보통 60이 쓰임.
@@ -422,6 +435,13 @@ if __name__ == "__main__":
         dest="use_reranker",
         action="store_false",
         help="Disable Reranker",
+    )
+    parser.add_argument(
+        "--topn",
+        metavar=50,
+        type=int,
+        default=50,
+        help="Number of candidates to rerank",
     )
 
     args = parser.parse_args()
