@@ -77,11 +77,22 @@ uv run code/src/train.py \
 --eval_retrieval \
 --overwrite_cache
 
+# Test data predictions
 uv run code/src/inference.py \
 --output_dir code/predictions/baseline_hybrid_chunk_0.5_0.5_v2 \
 --dataset_name raw/data/test_dataset/ \
 --model_name_or_path code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5_v2 \
 --do_predict \
+--eval_retrieval \
+--top_k_retrieval 10 \
+--bm25_weight 0.5 \
+--dense_weight 0.5 
+
+# Vaildation data inference
+uv run code/src/inference.py \
+--output_dir code/predictions/baseline_hybrid_chunk_0.5_0.5_v2 \
+--dataset_name raw/data/test_dataset/ \
+--model_name_or_path code/models/train_dataset/baseline_hybrid_chunk_0.5_0.5_v2 \
 --eval_retrieval \
 --top_k_retrieval 10 \
 --bm25_weight 0.5 \
