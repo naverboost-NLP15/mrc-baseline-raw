@@ -74,7 +74,9 @@ class HybridRetrieval:
             print(f"Cached Total Chunks: {len(self.texts)}")
         else:
             # Wikipedia 문서 로드
-            with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
+            with open(
+                os.path.join(data_path, context_path), "r", encoding="utf-8"
+            ) as f:
                 wiki: dict = json.load(f)
 
             self.texts = []
@@ -107,12 +109,15 @@ class HybridRetrieval:
 
             # Cache 저장
             with open(chunk_cache_path, "wb") as f:
-                pickle.dump({
-                    "texts": self.texts,
-                    "titles": self.titles,
-                    "doc_ids": self.doc_ids,
-                    "ids": self.ids
-                }, f)
+                pickle.dump(
+                    {
+                        "texts": self.texts,
+                        "titles": self.titles,
+                        "doc_ids": self.doc_ids,
+                        "ids": self.ids,
+                    },
+                    f,
+                )
             print("Chunking 결과 저장 완료")
 
         # Dense Model Load
@@ -236,7 +241,7 @@ class HybridRetrieval:
         dense_weight: float = 0.5,
     ) -> pd.DataFrame:
         """
-        Hybrid Search + Reranking 수행 함수
+        Hybrid Search 수행 함수 (Candidate Expansion -> Fusion -> Reranking)
         """
 
         assert (
@@ -252,8 +257,13 @@ class HybridRetrieval:
 
         total_results = []
 
+        # 0. Candidate Expansion: 최종 topk보다 더 많은 후보 검색
+        topn_candidate = min(len(self.ids), topk * 5)
+        if topn_candidate < 50:
+            topn_candidate = 50
+
         # 1. Sparse Search (BM25)
-        print("Sparse 검색 중...")
+        print(f"Sparse 검색 중...(Top-{topn_candidate})")
         bm25_scores_list: list[NDArray[np.float64]] | list = []
         bm25_indices_list: list[NDArray[np.int64]] | list = []
 
@@ -261,14 +271,13 @@ class HybridRetrieval:
             tokenized_query = self.kiwi_tokenizer(query)
             scores = self.bm25.get_scores(tokenized_query)
 
-            # Top-k 인덱스만 뽑아옵니다.
-            topk_indices = np.argsort(scores)[::-1][:topk]
-            bm25_scores_list.append(scores[topk_indices])
-            bm25_indices_list.append(topk_indices)
+            # topn_candidate 인덱스만 뽑아오기
+            topn_indices = np.argsort(scores)[::-1][:topn_candidate]
+            bm25_scores_list.append(scores[topn_indices])
+            bm25_indices_list.append(topn_indices)
 
         # 2. Dense Search (FAISS)
-        print("Dense 검색 중...")
-
+        print(f"Dense 검색 중...(Top-{topn_candidate})")
         query_embeds = self.encoder.encode(
             queries,
             batch_size=8,
@@ -277,7 +286,7 @@ class HybridRetrieval:
             prompt_name="query",
         )
         dense_scores_list, dense_indices_list = self.faiss_index.search(
-            query_embeds, topk
+            query_embeds, topn_candidate
         )
 
         # 3. Fusion
@@ -299,11 +308,32 @@ class HybridRetrieval:
                     doc_score_map[idx] = 0
                 doc_score_map[idx] += dense_weight * (1 / (k + rank + 1))
 
-            # Sort by fused
-            sorted_docs = sorted(
-                doc_score_map.items(), key=lambda x: x[1], reverse=True
-            )[:topk]
-            final_indices = [x[0] for x in sorted_docs]
+            # fused score 순 정렬
+            sorted_docs = sorted(doc_score_map.items(), key=lambda x: -x[1])
+
+            # ! Reranking
+            rerank_candidates_count = min(len(sorted_docs), 50)
+            rerank_candidates = sorted_docs[:rerank_candidates_count]
+
+            final_indices = []
+
+            if self.use_reranker and self.reranker:
+                pairs = []
+                candidates_indices = [candidate[0] for candidate in rerank_candidates]
+
+                for idx in candidates_indices:
+                    doc_text = f"{self.titles[idx]} {self.texts[idx]}"
+                    pairs.append((query, doc_text))
+
+                rerank_scores = self.reranker.predict(pairs)
+
+                reranked_results = sorted(
+                    zip(candidates_indices, rerank_scores), key=lambda x: -x[1]
+                )
+
+                final_indices = [x[0] for x in reranked_results[:topk]]
+            else:
+                final_indices = [x[0] for x in rerank_candidates[:topk]]
 
             # Final docs construct
             context = "\n\n".join([self.texts[idx] for idx in final_indices])
@@ -399,6 +429,17 @@ if __name__ == "__main__":
         type=float,
         default=1.0,
         help="Weight for Dense results",
+    )
+    parser.add_argument(
+        "--use_raranker",
+        action="store_true",
+        help="Use Reranker",
+    )
+    parser.add_argument(
+        "--no_reranker",
+        dest="use_reranker",
+        action="store_false",
+        help="Disable Reranker",
     )
 
     args = parser.parse_args()
