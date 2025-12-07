@@ -242,6 +242,7 @@ class HybridRetrieval:
         self,
         query_or_dataset: str | Dataset,
         topk: int = 20,
+        topn: int = 50,
         bm25_weight: float = 0.5,
         dense_weight: float = 0.5,
     ) -> pd.DataFrame:
@@ -264,8 +265,8 @@ class HybridRetrieval:
 
         # 0. Candidate Expansion: 최종 topk보다 더 많은 후보 검색
         topn_candidate = min(len(self.ids), topk * 5)
-        if topn_candidate < 50:
-            topn_candidate = 50
+        if topn_candidate < topn:
+            topn_candidate = topn
 
         # 1. Sparse Search (BM25)
         print(f"Sparse 검색 중...(Top-{topn_candidate})")
@@ -326,7 +327,7 @@ class HybridRetrieval:
 
             # ! Reranking
             # TODO: 후보군 개수 따로 변수로 관리
-            rerank_candidates_count = min(len(sorted_docs), 50)
+            rerank_candidates_count = min(len(sorted_docs), topn)
             rerank_candidates = sorted_docs[:rerank_candidates_count]
 
             final_indices = []
@@ -441,7 +442,7 @@ if __name__ == "__main__":
         metavar=50,
         type=int,
         default=50,
-        help="Number of candidates to rerank",
+        help="Number of candidates for rerank",
     )
 
     args = parser.parse_args()
@@ -479,6 +480,7 @@ if __name__ == "__main__":
         df = retriever.retrieve(
             query_or_dataset=full_ds,
             topk=args.topk,
+            topn=args.topn,
             bm25_weight=args.bm25_weight,
             dense_weight=args.dense_weight,
         )
