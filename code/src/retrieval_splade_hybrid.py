@@ -10,11 +10,12 @@ from typing import List, Union, Optional, Tuple
 from datasets import Dataset
 
 import torch
-import faiss
 from kiwipiepy import Kiwi
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from sentence_transformers import SparseEncoder
+import faiss
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from scipy.sparse import csr_matrix, save_npz, load_npz
 
 from numpy.typing import NDArray
 
@@ -38,10 +39,10 @@ class HybridRetrieval:
         reranker_model_name: str = "BAAI/bge-reranker-v2-m3",
     ) -> None:
         """
-        Sparse + Dense + Reranker를 결합한 Hybrid Retriever
+        Sparse(SPLADE) + Dense + Reranker를 결합한 Hybrid Retriever
 
         Args:
-            tokenize_fn (None): Defaults to Kiwi tokenizer
+            tokenize_fn (None): Not used for SPLADE.
             data_path (str | None, optional): _description_. Defaults to "./raw/data".
             context_path (str | None, optional): _description_. Defaults to "wikipedia_documents.json".
             chunk_size (int, optional): Chunk size. Defaults to 1000.
@@ -55,7 +56,7 @@ class HybridRetrieval:
         self.chunk_overlap = chunk_overlap
         self.use_reranker = use_reranker
 
-        # Kiwi 형태소 분석기
+        # Kiwi 형태소 분석기 (Chunking 시 문장 분리 용도로만 사용)
         self.kiwi = Kiwi()
 
         # Chunking Cache 파일 경로
@@ -119,17 +120,25 @@ class HybridRetrieval:
                     f,
                 )
             print("Chunking 결과 저장 완료")
+        
+        # Sparse Model (SPLADE) Load
+        self.sparse_model_name = "telepix/PIXIE-Splade-Preview"
+        self.sparse_encoder = SparseEncoder(self.sparse_model_name)
+        # GPU 사용 가능 시 이동
+        if torch.cuda.is_available():
+            self.sparse_encoder.to("cuda")
+        
+        self.sparse_matrix = None # get_embedding()에서 로드
 
         # Dense Model Load
         self.embedding_model_name = (
-            "telepix/PIXIE-Rune-Preview"  # TODO:더 정밀한 성능 평가 필요
+            "telepix/PIXIE-Rune-Preview" 
         )
         self.encoder = SentenceTransformer(self.embedding_model_name)
+        
+        self.faiss_index = None # get_embedding()에서 로드
 
-        self.bm25 = None
-        self.faiss_index = None
-
-        # TODO: Reranker Load
+        # Reranker Load
         self.reranker = None
         if self.use_reranker:
             print(f"Reranker 로딩 중...({reranker_model_name})")
@@ -155,66 +164,90 @@ class HybridRetrieval:
         except Exception:
             sents = text.split(". ")
 
-        # 2. 문장들을 다시 합치되, 확실한 구분자(\n\n) 사용
+        # 2. 문장들을 다시 합치되, 확실한 구분자("\n\n") 사용
         preprocessed_text = "\n\n".join(sents)
 
         # 3. RecursiveCharacterTextSplitter 사용
-        # separators를 설정하여 우리가 넣은 구분자(\n\n)를 최우선으로 자르도록 유도
+        # separators를 설정하여 우리가 넣은 구분자("\n\n")를 최우선으로 자르도록 유도
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
-            separators=["\n\n", "\n", " ", ""],  # 문장 단위(\n\n) 우선 분할 시도
+            separators=["\n\n", "\n", " ", ""],  # 문장 단위("\n\n") 우선 분할 시도
             length_function=len,
         )
 
         return text_splitter.split_text(preprocessed_text)
 
-    def kiwi_tokenizer(self, text: str) -> list[str]:
-        """
-        형태소의 품사가 명사, 동사, 형용사, 숫자, 외국어, 한자 등인 형태소만 추출
-        """
-        tokens = self.kiwi.tokenize(text)
-        return [
-            t.form
-            for t in tokens
-            if t.tag.startswith("N")
-            or t.tag.startswith("V")
-            or t.tag.startswith("SN")
-            or t.tag.startswith("SL")
-            or t.tag.startswith("SH")
-        ]
-
     def get_embedding(self) -> None:
         """
-        BM25 Retriever와 Dense Retriever를 생성하거나 로드하여 Ensemble Retriever를 구축
+        Sparse(SPLADE) Retriever와 Dense Retriever를 생성하거나 로드하여 Ensemble Retriever를 구축
         """
         # sparse, dense embedding 저장 경로 설정 (Chunk 정보 포함)
         model_name_str = self.embedding_model_name.replace("/", "_")
+        sparse_model_str = self.sparse_model_name.replace("/", "_")
+        
         chunk_suffix = f"_chunk{self.chunk_size}_overlap{self.chunk_overlap}_v3"
 
-        bm25_path = os.path.join(self.data_path, f"bm25_wiki{chunk_suffix}.pkl")
+        # BM25 대신 SPLADE sparse matrix 경로
+        sparse_matrix_path = os.path.join(self.data_path, f"sparse_{sparse_model_str}{chunk_suffix}.npz")
         faiss_path = os.path.join(
             self.data_path, f"faiss_{model_name_str}{chunk_suffix}.index"
         )
 
-        # Sparse(BM25) 설정
-        if os.path.isfile(bm25_path):
-            print("BM25 retriever 로딩 중...")
-            with open(bm25_path, "rb") as f:
-                self.bm25 = pickle.load(f)
-
+        # Sparse(SPLADE) 설정
+        if os.path.isfile(sparse_matrix_path):
+            print("SPLADE sparse matrix 로딩 중...")
+            self.sparse_matrix = load_npz(sparse_matrix_path)
+            print("SPLADE sparse matrix 로드 완료.")
         else:
-            print("BM25 retriever 구축 중...")
-            # ! text + title로 합쳐서 인덱싱합니다.
-            tokenized_corpus = [
-                self.kiwi_tokenizer(tit + " " + txt)
-                for tit, txt in zip(self.titles, self.texts)
-            ]
-            self.bm25 = BM25Okapi(corpus=tokenized_corpus)
+            print("SPLADE sparse matrix 구축 중... (시간이 소요될 수 있습니다)")
+            
+            # 문서 인코딩 (text + title)
+            docs = [f"{tit}\n{txt}" for tit, txt in zip(self.titles, self.texts)]
+            
+            # 배치 단위로 인코딩하여 CSR Matrix 구성
+            # 메모리 효율을 위해 배치 처리
+            batch_size = 4
+            all_embeddings = []
+            
+            for i in tqdm(range(0, len(docs), batch_size), desc="Encoding Sparse Docs"):
+                batch_docs = docs[i : i + batch_size]
+                # encode_document returns dictionary or tensor depending on model? 
+                # SparseEncoder.encode_document returns {input_ids, attention_mask, ...} usually for training?
+                # But for inference, it returns sparse embeddings.
+                # Let's check the doc: "outputs sparse lexical vectors"
+                # Using encode_document method of SparseEncoder
+                
+                with torch.no_grad():
+                    # encode_document returns a dictionary of sparse vectors or a tensor
+                    # output is typically a torch.Tensor (batch, vocab)
+                    embeddings = self.sparse_encoder.encode_document(batch_docs)
+                
+                # Convert to sparse csr_matrix to save memory
+                if isinstance(embeddings, torch.Tensor):
+                    if embeddings.is_sparse:
+                        embeddings = embeddings.to_dense()
+                    embeddings = embeddings.cpu().numpy()
+                
+                # Convert active elements to csr
+                # embeddings is dense (batch, vocab_size) with many zeros.
+                # Efficient conversion:
+                sparse_batch = csr_matrix(embeddings)
+                all_embeddings.append(sparse_batch)
 
-            with open(bm25_path, "wb") as f:
-                pickle.dump(self.bm25, f)
-            print("BM25 retriever saved.")
+            # Move model to CPU to free GPU memory
+            print("SPLADE encoding done. Moving model to CPU...")
+            self.sparse_encoder.to("cpu")
+            torch.cuda.empty_cache()
+            
+            # Stack all batches
+            from scipy.sparse import vstack
+            self.sparse_matrix = vstack(all_embeddings)
+            
+            print(f"Sparse Matrix Shape: {self.sparse_matrix.shape}")
+            
+            save_npz(sparse_matrix_path, self.sparse_matrix)
+            print("SPLADE sparse matrix saved.")
 
         # Dense 설정
         if os.path.exists(faiss_path):
@@ -247,11 +280,11 @@ class HybridRetrieval:
         dense_weight: float = 0.5,
     ) -> pd.DataFrame:
         """
-        Hybrid Search 수행 함수 (Candidate Expansion -> Fusion -> Reranking)
+        Hybrid Search 수행 함수 (Sparse(SPLADE) + Dense -> Fusion -> Reranking)
         """
 
         assert (
-            self.bm25 is not None and self.faiss_index is not None
+            self.sparse_matrix is not None and self.faiss_index is not None
         ), "get_embedding() 이 먼저 호출되어야 합니다."
 
         if isinstance(query_or_dataset, str):
@@ -268,19 +301,58 @@ class HybridRetrieval:
         if topn_candidate < topn:
             topn_candidate = topn
 
-        # 1. Sparse Search (BM25)
-        print(f"Sparse 검색 중...(Top-{topn_candidate})")
-        bm25_scores_list: list[NDArray[np.float64]] | list = []
-        bm25_indices_list: list[NDArray[np.int64]] | list = []
-
-        for query in tqdm(queries, desc="BM25"):
-            tokenized_query = self.kiwi_tokenizer(query)
-            scores = self.bm25.get_scores(tokenized_query)
-
-            # topn_candidate 인덱스만 뽑아오기
-            topn_indices = np.argsort(scores)[::-1][:topn_candidate]
-            bm25_scores_list.append(scores[topn_indices])
-            bm25_indices_list.append(topn_indices)
+        # 1. Sparse Search (SPLADE)
+        print(f"Sparse(SPLADE) 검색 중...(Top-{topn_candidate})")
+        sparse_scores_list = []
+        sparse_indices_list = []
+        
+        # 쿼리 인코딩
+        # encode_query returns torch.Tensor (batch, vocab)
+        # 여러 쿼리를 한번에 처리할 수 있도록 배치 처리가 좋지만, SparseEncoder.encode_query가 리스트를 받는지 확인 필요
+        # 문서에 따르면 encode_query(text) or list of texts.
+        
+        # 하지만 결과가 텐서로 나오면 메모리 문제가 있을 수 있으므로 배치 처리
+        
+        # 배치 처리
+        batch_size = 32
+        for i in tqdm(range(0, len(queries), batch_size), desc="SPLADE Query Encoding"):
+            batch_queries = queries[i : i + batch_size]
+            with torch.no_grad():
+                query_embeddings = self.sparse_encoder.encode_query(batch_queries)
+        
+            if isinstance(query_embeddings, torch.Tensor):
+                if query_embeddings.is_sparse:
+                    query_embeddings = query_embeddings.to_dense()
+                query_embeddings = query_embeddings.cpu().numpy()
+            
+            # Sparse Matrix Multiplication (Queries x Docs)
+            # query_embeddings: (batch_size, vocab)
+            # sparse_matrix: (num_docs, vocab)
+            # result: (batch_size, num_docs)
+            
+            # 변환: 효율적인 계산을 위해 query도 sparse matrix로 변환
+            query_sparse = csr_matrix(query_embeddings)
+            
+            # Dot Product
+            # result shape: (batch_size, num_docs)
+            scores_matrix = query_sparse.dot(self.sparse_matrix.T)
+            
+            # 각 쿼리별로 Top-K 추출
+            for j in range(scores_matrix.shape[0]):
+                # Get row
+                row = scores_matrix.getrow(j)
+                
+                if row.nnz == 0:
+                    # 매칭되는 문서가 없는 경우
+                    indices = np.array([], dtype=int)
+                    scores = np.array([], dtype=float)
+                else:
+                    sorted_idx_local = np.argsort(row.data)[::-1][:topn_candidate]
+                    scores = row.data[sorted_idx_local]
+                    indices = row.indices[sorted_idx_local]
+                    
+                sparse_scores_list.append(scores)
+                sparse_indices_list.append(indices)
 
         # 2. Dense Search (FAISS)
         print(f"Dense 검색 중...(Top-{topn_candidate})")
@@ -297,24 +369,20 @@ class HybridRetrieval:
 
         print("Dense 검색 완료. Reranking을 위해 GPU 메모리를 정리합니다...")
 
-        self.encoder.to("cpu")  # 모델을 RAM으로 이동
-        import gc
-
-        gc.collect()  # Python 가비지 컬렉터 실행
-        torch.cuda.empty_cache()  # GPU 캐시 메모리 비우기
-
         # 3. Fusion
         print("Fusing...")
-        k = 60  # 보통 60이 쓰임.
+        k = 60  # 보통 60이 쓰임. (Reciprocal Rank Fusion Parameter)
 
         for i, query in enumerate(tqdm(queries, desc="Fusion")):
             doc_score_map: dict[int, float] = {}
 
             # Sparse Scores (Rank based)
-            for rank, idx in enumerate(bm25_indices_list[i]):
-                if idx not in doc_score_map:
-                    doc_score_map[idx] = 0
-                doc_score_map[idx] += bm25_weight * (1 / (k + rank + 1))
+            # indices가 비어있을 수 있음
+            if i < len(sparse_indices_list):
+                for rank, idx in enumerate(sparse_indices_list[i]):
+                    if idx not in doc_score_map:
+                        doc_score_map[idx] = 0
+                    doc_score_map[idx] += bm25_weight * (1 / (k + rank + 1))
 
             # Dense Scores (Rank based)
             for rank, idx in enumerate(dense_indices_list[i]):
@@ -326,7 +394,6 @@ class HybridRetrieval:
             sorted_docs = sorted(doc_score_map.items(), key=lambda x: -x[1])
 
             # ! Reranking
-            # TODO: 후보군 개수 따로 변수로 관리
             rerank_candidates_count = min(len(sorted_docs), topn)
             rerank_candidates = sorted_docs[:rerank_candidates_count]
 
