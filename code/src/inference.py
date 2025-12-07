@@ -155,7 +155,33 @@ def run_retrieval(
                 "question": Value(dtype="string", id=None),
             }
         )
-    
+
+    else:
+        if "answers" in df.columns:
+            f = Features(
+                {
+                    "answers": Sequence(
+                        feature={
+                            "text": Value(dtype="string", id=None),
+                            "answer_start": Value(dtype="int32", id=None),
+                        },
+                        length=-1,
+                        id=None,
+                    ),
+                    "context": Value(dtype="string", id=None),
+                    "id": Value(dtype="string", id=None),
+                    "question": Value(dtype="string", id=None),
+                }
+            )
+        else:
+            f = Features(
+                {
+                    "context": Value(dtype="string", id=None),
+                    "id": Value(dtype="string", id=None),
+                    "question": Value(dtype="string", id=None),
+                }
+            )
+
     df = df[list(f.keys())]
     datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
     return datasets
@@ -242,6 +268,17 @@ def run_mrc(
     data_collator = DataCollatorWithPadding(
         tokenizer, pad_to_multiple_of=8 if training_args.fp16 else None
     )
+
+    # Sub-directory creation logic based on mode
+    import os
+
+    if training_args.do_eval:
+        training_args.output_dir = os.path.join(training_args.output_dir, "eval_pred")
+    elif training_args.do_predict:
+        training_args.output_dir = os.path.join(training_args.output_dir, "test")
+
+    if not os.path.exists(training_args.output_dir):
+        os.makedirs(training_args.output_dir)
 
     # Post-processing:
     def post_processing_function(
