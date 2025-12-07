@@ -122,7 +122,7 @@ class HybridRetrieval:
 
         # Dense Model Load
         self.embedding_model_name = (
-            "telepix/PIXIE-Rune-Preview"  # TODO:더 정밀한 성능 평가 필요
+            "telepix/PIXIE-Spell-Preview-1.7B"  # TODO:더 정밀한 성능 평가 필요
         )
         self.encoder = SentenceTransformer(self.embedding_model_name)
 
