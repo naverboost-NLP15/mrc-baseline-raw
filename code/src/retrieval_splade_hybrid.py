@@ -219,9 +219,10 @@ class HybridRetrieval:
                 # Using encode_document method of SparseEncoder
                 
                 with torch.no_grad():
-                    # encode_document returns a dictionary of sparse vectors or a tensor
-                    # output is typically a torch.Tensor (batch, vocab)
-                    embeddings = self.sparse_encoder.encode_document(batch_docs)
+                    with torch.cuda.amp.autocast():
+                        # encode_document returns a dictionary of sparse vectors or a tensor
+                        # output is typically a torch.Tensor (batch, vocab)
+                        embeddings = self.sparse_encoder.encode_document(batch_docs)
                 
                 # Convert to sparse csr_matrix to save memory
                 if isinstance(embeddings, torch.Tensor):
@@ -229,6 +230,10 @@ class HybridRetrieval:
                         embeddings = embeddings.to_dense()
                     embeddings = embeddings.cpu().numpy()
                 
+                # Scipy sparse does not support float16, cast to float32
+                if embeddings.dtype == np.float16:
+                    embeddings = embeddings.astype(np.float32)
+
                 # Convert active elements to csr
                 # embeddings is dense (batch, vocab_size) with many zeros.
                 # Efficient conversion:
@@ -318,12 +323,17 @@ class HybridRetrieval:
         for i in tqdm(range(0, len(queries), batch_size), desc="SPLADE Query Encoding"):
             batch_queries = queries[i : i + batch_size]
             with torch.no_grad():
-                query_embeddings = self.sparse_encoder.encode_query(batch_queries)
+                with torch.cuda.amp.autocast():
+                    query_embeddings = self.sparse_encoder.encode_query(batch_queries)
         
             if isinstance(query_embeddings, torch.Tensor):
                 if query_embeddings.is_sparse:
                     query_embeddings = query_embeddings.to_dense()
                 query_embeddings = query_embeddings.cpu().numpy()
+            
+            # Scipy sparse does not support float16
+            if query_embeddings.dtype == np.float16:
+                query_embeddings = query_embeddings.astype(np.float32)
             
             # Sparse Matrix Multiplication (Queries x Docs)
             # query_embeddings: (batch_size, vocab)
