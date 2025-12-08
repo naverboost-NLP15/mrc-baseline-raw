@@ -46,7 +46,14 @@ def main():
     )
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    training_args.do_train = True
+    # wandb 설정
+    import os
+
+    training_args.report_to = ["wandb"]
+    if "WANDB_PROJECT" not in os.environ:
+        os.environ["WANDB_PROJECT"] = "QDQA"
+    if training_args.run_name is None:
+        training_args.run_name = training_args.output_dir.split("/")[-1]
 
     print(f"model is from {model_args.model_name_or_path}")
     print(f"data is from {data_args.dataset_name}")
@@ -224,7 +231,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False,  # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
