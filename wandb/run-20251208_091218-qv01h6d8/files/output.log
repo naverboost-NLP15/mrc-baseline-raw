@@ -1,0 +1,58 @@
+ 17%|█████████████▎                                                                  | 500/2994 [01:49<08:18,  5.00it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+{'loss': 2.7593, 'grad_norm': 51.03536605834961, 'learning_rate': 4.834669338677355e-05, 'epoch': 0.1}
+{'loss': 1.4966, 'grad_norm': 29.96156120300293, 'learning_rate': 4.667668670674683e-05, 'epoch': 0.2}
+{'loss': 1.3421, 'grad_norm': 45.80486297607422, 'learning_rate': 4.500668002672011e-05, 'epoch': 0.3}
+{'loss': 1.1128, 'grad_norm': 48.08409881591797, 'learning_rate': 4.333667334669339e-05, 'epoch': 0.4}
+{'loss': 1.1975, 'grad_norm': 54.27277374267578, 'learning_rate': 4.166666666666667e-05, 'epoch': 0.5}
+  warnings.warn(
+100%|████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 436.98it/s]
+ 17%|█████████████▎                                                                  | 500/2994 [01:53<08:18,  5.00it/s]Traceback (most recent call last):
+12/08/2025 09:14:12 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 3290, in _determine_best_metric
+12/08/2025 09:14:13 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/roberta_large/predictions.json.
+12/08/2025 09:14:13 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/roberta_large/nbest_predictions.json.
+{'exact_match': 60.0, 'f1': 68.88855820105822, 'epoch': 0.5}
+    metric_value = metrics[metric_to_check]
+KeyError: 'eval_exact_match'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/code/src/train.py", line 387, in <module>
+    main()
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/code/src/train.py", line 118, in main
+    run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/code/src/train.py", line 352, in run_mrc
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 2325, in train
+    return inner_training_loop(
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 2756, in _inner_training_loop
+    self._maybe_log_save_evaluate(
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 3222, in _maybe_log_save_evaluate
+    is_new_best_metric = self._determine_best_metric(metrics=metrics, trial=trial)
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 3292, in _determine_best_metric
+    raise KeyError(
+KeyError: "The `metric_for_best_model` training argument is set to 'eval_exact_match', which is not found in the evaluation metrics. The available evaluation metrics are: ['exact_match', 'f1', 'epoch']. Consider changing the `metric_for_best_model` via the TrainingArguments."
+Traceback (most recent call last):
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 3290, in _determine_best_metric
+    metric_value = metrics[metric_to_check]
+KeyError: 'eval_exact_match'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/code/src/train.py", line 387, in <module>
+    main()
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/code/src/train.py", line 118, in main
+    run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/code/src/train.py", line 352, in run_mrc
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 2325, in train
+    return inner_training_loop(
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 2756, in _inner_training_loop
+    self._maybe_log_save_evaluate(
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 3222, in _maybe_log_save_evaluate
+    is_new_best_metric = self._determine_best_metric(metrics=metrics, trial=trial)
+  File "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer.py", line 3292, in _determine_best_metric
+    raise KeyError(
+KeyError: "The `metric_for_best_model` training argument is set to 'eval_exact_match', which is not found in the evaluation metrics. The available evaluation metrics are: ['exact_match', 'f1', 'epoch']. Consider changing the `metric_for_best_model` via the TrainingArguments."

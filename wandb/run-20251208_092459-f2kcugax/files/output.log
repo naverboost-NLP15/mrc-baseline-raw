@@ -1,0 +1,86 @@
+ 17%|█████████████▎                                                                  | 500/2994 [01:49<08:29,  4.89it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+{'loss': 3.0715, 'grad_norm': 20.264585494995117, 'learning_rate': 4.834669338677355e-05, 'epoch': 0.1}
+{'loss': 1.9578, 'grad_norm': 54.544158935546875, 'learning_rate': 4.667668670674683e-05, 'epoch': 0.2}
+{'loss': 1.4841, 'grad_norm': 44.726417541503906, 'learning_rate': 4.500668002672011e-05, 'epoch': 0.3}
+{'loss': 1.1567, 'grad_norm': 40.532318115234375, 'learning_rate': 4.333667334669339e-05, 'epoch': 0.4}
+{'loss': 1.222, 'grad_norm': 43.893917083740234, 'learning_rate': 4.166666666666667e-05, 'epoch': 0.5}
+  warnings.warn(
+100%|████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 350.01it/s]
+ 33%|██████████████████████████▍                                                    | 1000/2994 [03:48<06:13,  5.34it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/08/2025 09:26:52 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                        
+12/08/2025 09:26:53 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/roberta_large/predictions.json.
+12/08/2025 09:26:53 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/roberta_large/nbest_predictions.json.
+{'eval_exact_match': 56.25, 'eval_f1': 66.73936711436714, 'epoch': 0.5}
+{'loss': 1.0899, 'grad_norm': 43.28384017944336, 'learning_rate': 3.999665998663995e-05, 'epoch': 0.6}
+{'loss': 1.0888, 'grad_norm': 17.694053649902344, 'learning_rate': 3.832665330661323e-05, 'epoch': 0.7}
+{'loss': 1.0003, 'grad_norm': 7.434993743896484, 'learning_rate': 3.6656646626586514e-05, 'epoch': 0.8}
+{'loss': 0.9994, 'grad_norm': 34.4550666809082, 'learning_rate': 3.498663994655979e-05, 'epoch': 0.9}
+{'loss': 0.9243, 'grad_norm': 29.133638381958008, 'learning_rate': 3.331663326653307e-05, 'epoch': 1.0}
+100%|████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 445.46it/s]
+ 50%|███████████████████████████████████████▌                                       | 1500/2994 [05:46<05:21,  4.65it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/08/2025 09:28:52 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                        
+12/08/2025 09:28:52 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/roberta_large/predictions.json.
+12/08/2025 09:28:52 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/roberta_large/nbest_predictions.json.
+{'eval_exact_match': 59.166666666666664, 'eval_f1': 68.06013431013433, 'epoch': 1.0}
+{'loss': 0.4816, 'grad_norm': 14.91487979888916, 'learning_rate': 3.164662658650634e-05, 'epoch': 1.1}
+{'loss': 0.6131, 'grad_norm': 24.800626754760742, 'learning_rate': 2.9976619906479626e-05, 'epoch': 1.2}
+{'loss': 0.5319, 'grad_norm': 5.509306907653809, 'learning_rate': 2.8306613226452906e-05, 'epoch': 1.3}
+{'loss': 0.4924, 'grad_norm': 22.303543090820312, 'learning_rate': 2.6636606546426184e-05, 'epoch': 1.4}
+{'loss': 0.5536, 'grad_norm': 67.0188980102539, 'learning_rate': 2.4966599866399468e-05, 'epoch': 1.5}
+100%|████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 418.95it/s]
+ 67%|████████████████████████████████████████████████████▊                          | 2000/2994 [07:50<03:33,  4.66it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/08/2025 09:30:50 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                        
+12/08/2025 09:30:51 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/roberta_large/predictions.json.
+12/08/2025 09:30:51 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/roberta_large/nbest_predictions.json.
+{'eval_exact_match': 63.333333333333336, 'eval_f1': 71.2010582010582, 'epoch': 1.5}
+{'loss': 0.4636, 'grad_norm': 13.480831146240234, 'learning_rate': 2.3296593186372748e-05, 'epoch': 1.6}
+{'loss': 0.5497, 'grad_norm': 19.946664810180664, 'learning_rate': 2.162658650634603e-05, 'epoch': 1.7}
+{'loss': 0.4402, 'grad_norm': 3.760920763015747, 'learning_rate': 1.9956579826319306e-05, 'epoch': 1.8}
+{'loss': 0.4541, 'grad_norm': 27.49127769470215, 'learning_rate': 1.8286573146292587e-05, 'epoch': 1.9}
+{'loss': 0.4615, 'grad_norm': 11.42781925201416, 'learning_rate': 1.6616566466265864e-05, 'epoch': 2.0}
+100%|████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 319.10it/s]
+ 84%|█████████████████████████████████████████████████████████████████▉             | 2500/2994 [09:55<01:48,  4.55it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/08/2025 09:32:54 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                        
+12/08/2025 09:32:55 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/roberta_large/predictions.json.
+12/08/2025 09:32:55 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/roberta_large/nbest_predictions.json.
+{'eval_exact_match': 63.75, 'eval_f1': 71.70843657976015, 'epoch': 2.0}
+{'loss': 0.1594, 'grad_norm': 17.7939510345459, 'learning_rate': 1.4946559786239144e-05, 'epoch': 2.1}
+{'loss': 0.1508, 'grad_norm': 7.019372463226318, 'learning_rate': 1.3276553106212425e-05, 'epoch': 2.2}
+{'loss': 0.2179, 'grad_norm': 55.48869323730469, 'learning_rate': 1.1606546426185705e-05, 'epoch': 2.3}
+{'loss': 0.2246, 'grad_norm': 3.5953140258789062, 'learning_rate': 9.936539746158984e-06, 'epoch': 2.4}
+{'loss': 0.1794, 'grad_norm': 53.82667922973633, 'learning_rate': 8.266533066132265e-06, 'epoch': 2.51}
+100%|████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 324.31it/s]
+100%|███████████████████████████████████████████████████████████████████████████████| 2994/2994 [12:07<00:00,  4.11it/s]
+12/08/2025 09:34:59 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/08/2025 09:35:00 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/roberta_large/predictions.json.
+12/08/2025 09:35:00 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/roberta_large/nbest_predictions.json.
+{'eval_exact_match': 63.75, 'eval_f1': 72.99371693121694, 'epoch': 2.51}
+{'loss': 0.1935, 'grad_norm': 0.03104386106133461, 'learning_rate': 6.596526386105545e-06, 'epoch': 2.61}
+{'loss': 0.1539, 'grad_norm': 9.5994291305542, 'learning_rate': 4.926519706078825e-06, 'epoch': 2.71}
+{'loss': 0.1791, 'grad_norm': 0.020417340099811554, 'learning_rate': 3.256513026052104e-06, 'epoch': 2.81}
+{'loss': 0.1482, 'grad_norm': 0.058723222464323044, 'learning_rate': 1.5865063460253842e-06, 'epoch': 2.91}
+{'train_runtime': 728.9205, 'train_samples_per_second': 32.835, 'train_steps_per_second': 4.107, 'train_loss': 0.6953630625763653, 'epoch': 3.0}
+***** train metrics *****
+  epoch                    =        3.0
+  total_flos               = 15523904GF
+  train_loss               =     0.6954
+  train_runtime            = 0:12:08.92
+  train_samples            =       7978
+  train_samples_per_second =     32.835
+  train_steps_per_second   =      4.107
+  warnings.warn(
+100%|████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 319.19it/s]
+12/08/2025 09:37:14 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+100%|███████████████████████████████████████████████████████████████████████████████████| 60/60 [00:04<00:00, 13.76it/s]
+12/08/2025 09:37:14 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/roberta_large/predictions.json.
+12/08/2025 09:37:14 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/roberta_large/nbest_predictions.json.
+***** eval metrics *****
+  epoch            =     3.0
+  eval_exact_match =   63.75
+  eval_f1          = 71.7084
+  eval_samples     =     474

@@ -31,24 +31,33 @@ python inference.py \
 --top_k_retrieval 10
 ```
  
+
+### TRAIN CODE
 ```
-uv run train.py \
---output_dir ./models/train_dataset/baseline_hybird_add_dense \
+uv run code/src/train.py \
+--output_dir ./models/train_dataset/baseline \
 --do_train \
 --do_eval \
 --model_name_or_path klue/bert-base \
---dataset_name ../raw/data/train_dataset \
+--dataset_name raw/data/train_dataset \
 --per_device_train_batch_size 16 \
---gradient_accumulation_steps 2 \
---fp16 \
+--per_device_eval_batch_size 16 \
 --num_train_epochs 3 \
+--fp16 \
 --logging_steps 100 \
---eval_strategy steps \
 --eval_steps 500 \
 --save_steps 500 \
---overwrite_cache
+--eval_strategy steps \
+--save_total_limit 2 \
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--greater_is_better True \
+--overwrite_output_dir
+# --weight_decay 0.01 \
+# --learning_rate 3e-5 \
 ```
 
+### INFERENCE CODE
 ```
 uv run code/inference.py \
 --output_dir code/predictions/baseline_hybird_add_dense \
@@ -62,7 +71,7 @@ uv run code/inference.py \
 ```
 
 uv run code/src/train.py \
---output_dir code/models/train_dataset/baseline_with_v3 \
+--output_dir code/models/train_dataset/baseline \
 --do_train \
 --do_eval \
 --model_name_or_path klue/bert-base \
@@ -74,9 +83,11 @@ uv run code/src/train.py \
 --eval_strategy steps \
 --eval_steps 500 \
 --save_steps 500 \
+--overwrite_output_dir
 --overwrite_cache
 
 # Test data predictions
+
 uv run code/src/inference.py \
 --output_dir code/predictions/baseline_with_v3 \
 --dataset_name raw/data/test_dataset/ \
@@ -88,15 +99,17 @@ uv run code/src/inference.py \
 --dense_weight 0.5 
 
 # Vaildation data inference
+
 uv run code/src/inference.py \
---output_dir code/predictions/baseline_with_v3 \
+--output_dir code/predictions/baseline_real \
 --dataset_name raw/data/train_dataset/ \
---model_name_or_path code/models/train_dataset/baseline_with_v3 \
+--model_name_or_path code/models/train_dataset/baseline \
 --eval_retrieval \
 --top_k_retrieval 5 \
 --bm25_weight 0.5 \
---dense_weight 0.5 \ 
+--dense_weight 0.5 \
 --do_eval
+
 
 # baseline inference(Sparse Only)
 
@@ -107,3 +120,31 @@ uv run code/src/inference_sparse.py \
 --eval_retrieval \
 --top_k_retrieval 5 \
 --do_eval
+
+
+
+# roberta
+
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/roberta_large \
+--do_train \
+--do_eval \
+--model_name_or_path klue/roberta-large \
+--dataset_name raw/data/train_dataset \
+--per_device_train_batch_size 8 \
+--per_device_eval_batch_size 8 \
+--fp16 \
+--num_train_epochs 3 \
+--logging_steps 100 \
+--eval_strategy steps \
+--eval_steps 500 \
+--save_steps 500 \
+--save_total_limit 2 \
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--overwrite_output_dir \
+--overwrite_cache
+--learning_rate 3e-5 \
+--weight_decay 0.01
+
+

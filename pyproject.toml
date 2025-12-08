@@ -15,6 +15,7 @@ dependencies = [
     "matplotlib>=3.10.7",
     "numpy<2.0.0",
     "pandas==2.3.3",
+    "qdrant-client>=1.12.1",
     "rank-bm25>=0.2.2",
     "scikit-learn>=1.7.2",
     "scipy>=1.15.3",
@@ -22,6 +23,7 @@ dependencies = [
     "sentence-transformers>=5.1.2",
     "slack-bolt>=1.27.0",
     "transformers>=4.42.0",
+    "wandb>=0.23.1",
 ]
 
 [dependency-groups]

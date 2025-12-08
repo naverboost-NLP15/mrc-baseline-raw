@@ -1,0 +1,62 @@
+{
+  "os":  "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "python":  "CPython 3.10.13",
+  "startedAt":  "2025-12-07T14:32:28.364458Z",
+  "args":  [
+    "--output_dir",
+    "code/models/train_dataset/roberta_large",
+    "--do_train",
+    "--do_eval",
+    "--model_name_or_path",
+    "klue/roberta-large",
+    "--dataset_name",
+    "raw/data/train_dataset",
+    "--per_device_train_batch_size",
+    "8",
+    "--fp16",
+    "--num_train_epochs",
+    "3",
+    "--logging_steps",
+    "100",
+    "--eval_strategy",
+    "steps",
+    "--eval_steps",
+    "500",
+    "--save_steps",
+    "500"
+  ],
+  "program":  "/home/wuhyun/competition/ODQA/QDQA_0.1/code/src/train.py",
+  "codePath":  "code/src/train.py",
+  "codePathLocal":  "code/src/train.py",
+  "git":  {
+    "remote":  "https://github.com/lim010111/mrc-baseline-private.git",
+    "commit":  "8cdabac003b2f1f387a89715c160e6b4149b1bf6"
+  },
+  "email":  "shinedngus225@gmail.com",
+  "root":  "/home/wuhyun/competition/ODQA/QDQA_0.1",
+  "host":  "DESKTOP-5TSMUVT",
+  "executable":  "/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/bin/python3",
+  "cpu_count":  6,
+  "cpu_count_logical":  12,
+  "gpu":  "NVIDIA GeForce RTX 3080",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "269427478528",
+      "used":  "213577498624"
+    }
+  },
+  "memory":  {
+    "total":  "16648417280"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GeForce RTX 3080",
+      "memoryTotal":  "10737418240",
+      "architecture":  "Ampere",
+      "uuid":  "GPU-823c3929-f7ae-6e21-884f-00ee3e13d053"
+    }
+  ],
+  "cudaVersion":  "12.9",
+  "writerId":  "ew5mfrswnxu2340q8adtbas2pepjpbw1"
+}
