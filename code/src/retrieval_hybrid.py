@@ -8,6 +8,7 @@ from tqdm.auto import tqdm
 from contextlib import contextmanager
 from typing import List, Union, Optional, Tuple
 from datasets import Dataset
+from rank_bm25 import BM25Okapi
 
 import torch
 import faiss
