@@ -12,7 +12,7 @@ from retrieval_hybrid import HybridRetrieval
 QDRANT_HOST = "lori2mai11ya.asuscomm.com"
 QDRANT_PORT = 6333
 
-def build_qdrant_index(data_path, context_path, chunk_size, chunk_overlap, model_name, collection_name=None):
+def build_qdrant_index(data_path, context_path, chunk_size, chunk_overlap, model_name, collection_name=None, api_key=None):
     # 1. Initialize HybridRetrieval to load and chunk data
     print("Initializing HybridRetrieval for data loading...")
     retriever = HybridRetrieval(
@@ -35,7 +35,7 @@ def build_qdrant_index(data_path, context_path, chunk_size, chunk_overlap, model
     
     # 3. Connect to Qdrant
     print(f"Connecting to Qdrant at {QDRANT_HOST}:{QDRANT_PORT}...")
-    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, api_key=api_key)
 
     # 4. Define Collection
     # Set collection name if not provided
@@ -117,6 +117,7 @@ if __name__ == "__main__":
     parser.add_argument("--chunk_overlap", type=int, default=200)
     parser.add_argument("--model_name", type=str, default="telepix/PIXIE-Rune-Preview", help="HuggingFace model name")
     parser.add_argument("--collection_name", type=str, default=None, help="Qdrant collection name (optional)")
+    parser.add_argument("--api_key", type=str, default=None, help="Qdrant API Key")
     
     args = parser.parse_args()
 
@@ -126,5 +127,6 @@ if __name__ == "__main__":
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
         model_name=args.model_name,
-        collection_name=args.collection_name
+        collection_name=args.collection_name,
+        api_key=args.api_key
     )
