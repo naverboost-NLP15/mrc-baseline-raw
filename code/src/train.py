@@ -46,6 +46,14 @@ def main():
         (ModelArguments, DataTrainingArguments, TrainingArguments)
     )
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    # wandb 설정
+    training_args.report_to = ["wandb"]
+    if "WANDB_PROJECT" not in os.environ:
+        os.environ["WANDB_PROJECT"] = "QDQA"
+    if training_args.run_name is None:
+        training_args.run_name = training_args.output_dir.split("/")[-1]
+
     print(model_args.model_name_or_path)
 
     # [참고] argument를 manual하게 수정하고 싶은 경우에 아래와 같은 방식을 사용할 수 있습니다
@@ -151,7 +159,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False,  # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -318,7 +326,10 @@ def run_mrc(
     metric = evaluate.load("squad")
 
     def compute_metrics(p: EvalPrediction):
-        return metric.compute(predictions=p.predictions, references=p.label_ids)
+        metrics = metric.compute(predictions=p.predictions, references=p.label_ids)
+
+        # Manually add the "eval_" prefix to match what the Trainer expects
+        return {f"eval_{k}": v for k, v in metrics.items()}
 
     # Trainer 초기화
     trainer = QuestionAnsweringTrainer(
