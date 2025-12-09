@@ -103,12 +103,11 @@ uv run code/src/inference.py \
 uv run code/src/inference.py \
 --output_dir code/predictions/baseline_real \
 --dataset_name raw/data/train_dataset/ \
---model_name_or_path code/models/train_dataset/baseline \
+--model_name_or_path code/models/train_dataset/roberta_large_korquad \
 --eval_retrieval \
---top_k_retrieval 5 \
---bm25_weight 0.5 \
---dense_weight 0.5 \
---do_eval
+--top_k_retrieval 1 \
+--do_eval \
+--alpha 0.5
 
 
 # baseline inference(Sparse Only)
@@ -174,7 +173,7 @@ uv run code/src/train.py \
 --add_korquad True
 
 
-# Korquad O, optim
+# bert, Korquad O, optim
 uv run code/src/train.py \
 --output_dir code/models/train_dataset/baseline_korquad_opt \
 --do_train \
@@ -204,7 +203,7 @@ uv run code/src/train.py \
 --fp16 \
 --seed 42
 
-# Korquad X, optim
+# bert, Korquad X, optim
 uv run code/src/train.py \
 --output_dir code/models/train_dataset/baseline_no_korquad \
 --do_train \
@@ -296,10 +295,10 @@ uv run code/src/train.py \
 
 ### "원본 + korquad" 후 "원본" 추가 파인튜닝
 uv run code/src/train.py \
---output_dir code/models/train_dataset/roberta_large_finetuned_final \
+--output_dir code/models/train_dataset/baseline_korquad_opt_finetuned_final \
 --do_train \
 --do_eval \
---model_name_or_path ./code/models/train_dataset/roberta_large_korquad \
+--model_name_or_path ./code/models/train_dataset/baseline_korquad_opt \
 --dataset_name raw/data/train_dataset \
 --add_korquad False \
 \
