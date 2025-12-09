@@ -34,9 +34,189 @@
 {'eval_exact_match': 54.166666666666664, 'eval_f1': 64.05008417508418, 'epoch': 1.6}
 {'loss': 0.9136, 'grad_norm': 21.733308792114258, 'learning_rate': 2.668e-05, 'epoch': 2.0}
 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 432.66it/s]
- 24%|███████████████████████████▋                                                                                         | 591/2500 [02:52<07:46,  4.09it/s]
+ 24%|████████████████████████████                                                                                         | 600/2500 [02:54<07:39,  4.14it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
 12/09/2025 18:30:15 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
-                                                                                                                                                             
+  warnings.warn(                                                                                                                                             
 12/09/2025 18:30:15 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
 12/09/2025 18:30:15 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
 {'eval_exact_match': 51.666666666666664, 'eval_f1': 61.62977994227996, 'epoch': 2.0}
+{'loss': 0.433, 'grad_norm': 10.881772994995117, 'learning_rate': 2.534666666666667e-05, 'epoch': 2.4}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 458.32it/s]
+ 28%|████████████████████████████████▊                                                                                    | 700/2500 [03:24<08:00,  3.75it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:30:44 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:30:44 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:30:44 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 55.0, 'eval_f1': 64.11886724386726, 'epoch': 2.4}
+{'loss': 0.4207, 'grad_norm': 20.00018882751465, 'learning_rate': 2.4013333333333333e-05, 'epoch': 2.8}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 361.37it/s]
+ 32%|█████████████████████████████████████▍                                                                               | 800/2500 [03:51<06:48,  4.16it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:31:14 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:31:14 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:31:14 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 56.25, 'eval_f1': 65.81712962962965, 'epoch': 2.8}
+{'loss': 0.3373, 'grad_norm': 7.067815780639648, 'learning_rate': 2.268e-05, 'epoch': 3.2}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 378.84it/s]
+ 36%|██████████████████████████████████████████                                                                           | 900/2500 [04:20<06:17,  4.24it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:31:41 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:31:41 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:31:41 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 55.0, 'eval_f1': 64.06664862914864, 'epoch': 3.2}
+{'loss': 0.2021, 'grad_norm': 4.391175270080566, 'learning_rate': 2.134666666666667e-05, 'epoch': 3.6}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 429.28it/s]
+ 40%|██████████████████████████████████████████████▍                                                                     | 1000/2500 [04:50<05:39,  4.42it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:32:10 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:32:10 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:32:10 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 54.583333333333336, 'eval_f1': 63.09574915824919, 'epoch': 3.6}
+{'loss': 0.1936, 'grad_norm': 21.091135025024414, 'learning_rate': 2.0013333333333334e-05, 'epoch': 4.0}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 423.11it/s]
+ 44%|███████████████████████████████████████████████████                                                                 | 1100/2500 [05:20<05:48,  4.01it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:32:40 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:32:40 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:32:40 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 55.833333333333336, 'eval_f1': 64.64829846079847, 'epoch': 4.0}
+{'loss': 0.112, 'grad_norm': 8.584860801696777, 'learning_rate': 1.868e-05, 'epoch': 4.4}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 412.78it/s]
+ 48%|███████████████████████████████████████████████████████▋                                                            | 1200/2500 [05:50<05:07,  4.23it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:33:09 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:33:10 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:33:10 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 54.166666666666664, 'eval_f1': 63.89433020683022, 'epoch': 4.4}
+{'loss': 0.1027, 'grad_norm': 9.027338027954102, 'learning_rate': 1.7346666666666668e-05, 'epoch': 4.8}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 453.62it/s]
+ 52%|████████████████████████████████████████████████████████████▎                                                       | 1300/2500 [06:20<04:50,  4.13it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:33:39 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:33:40 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:33:40 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 55.416666666666664, 'eval_f1': 65.51241582491585, 'epoch': 4.8}
+{'loss': 0.0847, 'grad_norm': 11.92576789855957, 'learning_rate': 1.6013333333333335e-05, 'epoch': 5.2}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 396.95it/s]
+ 56%|████████████████████████████████████████████████████████████████▉                                                   | 1400/2500 [06:50<08:56,  2.05it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:34:10 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:34:11 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:34:11 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 58.333333333333336, 'eval_f1': 67.21906565656566, 'epoch': 5.2}
+{'loss': 0.0645, 'grad_norm': 2.692392587661743, 'learning_rate': 1.468e-05, 'epoch': 5.6}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 378.24it/s]
+ 60%|█████████████████████████████████████████████████████████████████████▌                                              | 1500/2500 [07:17<04:05,  4.07it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:34:39 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:34:40 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:34:40 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 57.083333333333336, 'eval_f1': 66.30934343434345, 'epoch': 5.6}
+{'loss': 0.0741, 'grad_norm': 17.225242614746094, 'learning_rate': 1.3346666666666667e-05, 'epoch': 6.0}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 360.37it/s]
+ 64%|██████████████████████████████████████████████████████████████████████████▏                                         | 1600/2500 [07:47<03:37,  4.14it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:35:07 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:35:07 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:35:07 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 54.166666666666664, 'eval_f1': 63.6287878787879, 'epoch': 6.0}
+{'loss': 0.0378, 'grad_norm': 6.8372650146484375, 'learning_rate': 1.2013333333333334e-05, 'epoch': 6.4}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 422.38it/s]
+ 68%|██████████████████████████████████████████████████████████████████████████████▉                                     | 1700/2500 [08:18<03:01,  4.41it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:35:37 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:35:37 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:35:37 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 54.583333333333336, 'eval_f1': 63.71818146450502, 'epoch': 6.4}
+{'loss': 0.0377, 'grad_norm': 0.35715052485466003, 'learning_rate': 1.068e-05, 'epoch': 6.8}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 386.54it/s]
+ 72%|███████████████████████████████████████████████████████████████████████████████████▌                                | 1800/2500 [08:47<02:38,  4.43it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:36:07 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:36:08 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:36:08 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 53.333333333333336, 'eval_f1': 63.68999518999521, 'epoch': 6.8}
+{'loss': 0.0324, 'grad_norm': 0.9778701663017273, 'learning_rate': 9.346666666666666e-06, 'epoch': 7.2}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 437.79it/s]
+ 76%|████████████████████████████████████████████████████████████████████████████████████████▏                           | 1900/2500 [09:16<02:15,  4.44it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:36:36 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:36:37 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:36:37 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 54.166666666666664, 'eval_f1': 63.662848725348745, 'epoch': 7.2}
+{'loss': 0.0241, 'grad_norm': 9.921107292175293, 'learning_rate': 8.013333333333333e-06, 'epoch': 7.6}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 430.51it/s]
+ 80%|████████████████████████████████████████████████████████████████████████████████████████████▊                       | 2000/2500 [09:46<02:05,  3.98it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:37:06 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:37:06 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:37:06 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 54.583333333333336, 'eval_f1': 63.56661856661859, 'epoch': 7.6}
+{'loss': 0.0198, 'grad_norm': 1.8496415615081787, 'learning_rate': 6.68e-06, 'epoch': 8.0}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 440.02it/s]
+ 84%|█████████████████████████████████████████████████████████████████████████████████████████████████▍                  | 2100/2500 [10:12<01:36,  4.13it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:37:35 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:37:36 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:37:36 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 55.0, 'eval_f1': 64.71410533910536, 'epoch': 8.0}
+{'loss': 0.0161, 'grad_norm': 0.38244786858558655, 'learning_rate': 5.346666666666667e-06, 'epoch': 8.4}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 397.03it/s]
+ 88%|██████████████████████████████████████████████████████████████████████████████████████████████████████              | 2200/2500 [10:43<01:13,  4.09it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:38:02 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:38:02 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:38:02 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 52.5, 'eval_f1': 63.39929052429055, 'epoch': 8.4}
+{'loss': 0.0131, 'grad_norm': 0.975868821144104, 'learning_rate': 4.013333333333334e-06, 'epoch': 8.8}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 357.96it/s]
+ 92%|██████████████████████████████████████████████████████████████████████████████████████████████████████████▋         | 2300/2500 [11:12<00:45,  4.41it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:38:33 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:38:34 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:38:34 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 52.916666666666664, 'eval_f1': 62.684343434343454, 'epoch': 8.8}
+{'loss': 0.0115, 'grad_norm': 0.7517356872558594, 'learning_rate': 2.68e-06, 'epoch': 9.2}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 410.41it/s]
+ 96%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████▎    | 2400/2500 [11:42<00:22,  4.37it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:39:02 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:39:02 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:39:02 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 52.916666666666664, 'eval_f1': 62.72468734968738, 'epoch': 9.2}
+{'loss': 0.0085, 'grad_norm': 5.300887107849121, 'learning_rate': 1.3466666666666668e-06, 'epoch': 9.6}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 436.15it/s]
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2500/2500 [12:11<00:00,  4.39it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:39:31 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+  warnings.warn(                                                                                                                                             
+12/09/2025 18:39:32 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:39:32 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 53.75, 'eval_f1': 63.4111952861953, 'epoch': 9.6}
+{'loss': 0.013, 'grad_norm': 0.011500585824251175, 'learning_rate': 1.3333333333333334e-08, 'epoch': 10.0}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 341.79it/s]
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2500/2500 [12:16<00:00,  3.39it/s]
+12/09/2025 18:40:01 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
+12/09/2025 18:40:01 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:40:01 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 54.583333333333336, 'eval_f1': 64.10563973063975, 'epoch': 10.0}
+{'train_runtime': 738.3374, 'train_samples_per_second': 108.054, 'train_steps_per_second': 3.386, 'train_loss': 0.4888568992137909, 'epoch': 10.0}
+***** train metrics *****
+  epoch                    =       10.0
+  total_flos               = 14560941GF
+  train_loss               =     0.4889
+  train_runtime            = 0:12:18.33
+  train_samples            =       7978
+  train_samples_per_second =    108.054
+  train_steps_per_second   =      3.386
+  warnings.warn(
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 428.63it/s]
+12/09/2025 18:40:06 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 15/15 [00:01<00:00,  7.57it/s]
+12/09/2025 18:40:07 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:40:07 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+***** eval metrics *****
+  epoch            =    10.0
+  eval_exact_match = 58.3333
+  eval_f1          = 67.2191
+  eval_samples     =     474
