@@ -229,3 +229,66 @@ uv run code/src/train.py \
 --overwrite_output_dir \
 --fp16 \
 --seed 42
+
+
+# Korquad O, roberta-large
+
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/roberta_large_korquad \
+--do_train \
+--do_eval \
+--model_name_or_path klue/roberta-large \
+--dataset_name raw/data/train_dataset \
+--add_korquad True \
+\
+--per_device_train_batch_size 4 \
+--gradient_accumulation_steps 8 \
+--per_device_eval_batch_size 32 \
+\
+--learning_rate 1.5e-5 \
+--weight_decay 0.01 \
+--num_train_epochs 3 \
+--warmup_ratio 0.1 \
+\
+--logging_steps 500 \
+--eval_strategy steps \
+--eval_steps 500 \
+--save_steps 500 \
+--save_total_limit 2 \
+\
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--overwrite_output_dir \
+--fp16 \
+--seed 42
+
+# Korquad X, roberta-large
+
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/roberta_large_no_korquad \
+--do_train \
+--do_eval \
+--model_name_or_path klue/roberta-large \
+--dataset_name raw/data/train_dataset \
+--add_korquad False \
+\
+--per_device_train_batch_size 4 \
+--gradient_accumulation_steps 8 \
+--per_device_eval_batch_size 32 \
+\
+--learning_rate 1.5e-5 \
+--weight_decay 0.01 \
+--num_train_epochs 10 \
+--warmup_ratio 0.1 \
+\
+--logging_steps 100 \
+--eval_strategy steps \
+--eval_steps 100 \
+--save_steps 100 \
+--save_total_limit 2 \
+\
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--overwrite_output_dir \
+--fp16 \
+--seed 42
