@@ -26,9 +26,17 @@
 {'eval_exact_match': 50.833333333333336, 'eval_f1': 59.97468734968735, 'epoch': 1.2}
 {'loss': 0.9831, 'grad_norm': 15.605024337768555, 'learning_rate': 2.8013333333333335e-05, 'epoch': 1.6}
 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 422.17it/s]
- 16%|██████████████████▉                                                                                                  | 405/2500 [02:00<17:46,  1.96it/s]
+ 20%|███████████████████████▍                                                                                             | 500/2500 [02:25<07:31,  4.43it/s]/home/wuhyun/competition/ODQA/QDQA_0.1/.venv/lib/python3.10/site-packages/transformers/trainer_pt_utils.py:476: FutureWarning: DistributedTensorGatherer is deprecated and will be removed in v5 of Transformers.
 12/09/2025 18:29:45 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
-                                                                                                                                                             
+  warnings.warn(                                                                                                                                             
 12/09/2025 18:29:45 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
 12/09/2025 18:29:45 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
 {'eval_exact_match': 54.166666666666664, 'eval_f1': 64.05008417508418, 'epoch': 1.6}
+{'loss': 0.9136, 'grad_norm': 21.733308792114258, 'learning_rate': 2.668e-05, 'epoch': 2.0}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 240/240 [00:00<00:00, 432.66it/s]
+ 24%|███████████████████████████▋                                                                                         | 591/2500 [02:52<07:46,  4.09it/s]
+12/09/2025 18:30:15 - INFO - utils_qa -    Post-processing 240 example predictions split into 474 features.
+                                                                                                                                                             
+12/09/2025 18:30:15 - INFO - utils_qa -    Saving predictions to code/models/train_dataset/baseline_no_korquad/predictions.json.
+12/09/2025 18:30:15 - INFO - utils_qa -    Saving nbest_preds to code/models/train_dataset/baseline_no_korquad/nbest_predictions.json.
+{'eval_exact_match': 51.666666666666664, 'eval_f1': 61.62977994227996, 'epoch': 2.0}

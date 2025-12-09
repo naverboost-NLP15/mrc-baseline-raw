@@ -45,3 +45,4 @@ code/predictions/roberta_large_top1
 code/predictions/roberta_large
 code/predictions/baseline_real
 
+raw/data/sparse_bge_m3_chunk1000_overlap200_v3.npz
