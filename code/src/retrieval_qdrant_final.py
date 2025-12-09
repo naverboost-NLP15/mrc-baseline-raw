@@ -79,7 +79,7 @@ class QdrantHybridRetrieval:
         if collection_name is None:
             # Default fallback (build_qdrant_hybrid_index.py 규칙)
             safe_dense = dense_model_name.replace("/", "_").replace("-", "_")
-            self.collection_name = f"wiki_hybrid_{safe_dense}_splade_bm25"
+            self.collection_name = f"hybird_collection_v1"
         else:
             self.collection_name = collection_name
 
@@ -140,15 +140,25 @@ class QdrantHybridRetrieval:
             print("Chunking 결과 저장 완료")
 
         # 2. Load Models
-        model_kwargs = {"torch_dtype": torch.float16} if use_fp16 and torch.cuda.is_available() else {}
+        model_kwargs = (
+            {"torch_dtype": torch.float16}
+            if use_fp16 and torch.cuda.is_available()
+            else {}
+        )
 
         # Dense Encoder
         print(f"Loading Dense Encoder: {self.dense_model_name} (FP16={use_fp16})")
-        self.dense_encoder = SentenceTransformer(self.dense_model_name, model_kwargs=model_kwargs)
+        self.dense_encoder = SentenceTransformer(
+            self.dense_model_name, model_kwargs=model_kwargs
+        )
 
         # Sparse (SPLADE) Encoder
-        print(f"Loading Sparse (SPLADE) Model & Tokenizer: {self.sparse_model_name} (FP16={use_fp16})")
-        self.sparse_encoder = SparseEncoder(self.sparse_model_name, model_kwargs=model_kwargs)
+        print(
+            f"Loading Sparse (SPLADE) Model & Tokenizer: {self.sparse_model_name} (FP16={use_fp16})"
+        )
+        self.sparse_encoder = SparseEncoder(
+            self.sparse_model_name, model_kwargs=model_kwargs
+        )
         self.sparse_tokenizer = AutoTokenizer.from_pretrained(self.sparse_model_name)
         self.special_token_ids = set(self.sparse_tokenizer.all_special_ids)
 
@@ -372,7 +382,10 @@ class QdrantHybridRetrieval:
 
         print("Executing Dense Batch Search...")
         dense_results_batch = []
-        for i in tqdm(range(0, len(dense_requests), search_batch_size), desc="Dense Search Batches"):
+        for i in tqdm(
+            range(0, len(dense_requests), search_batch_size),
+            desc="Dense Search Batches",
+        ):
             batch_reqs = dense_requests[i : i + search_batch_size]
             batch_res = self.client.search_batch(
                 collection_name=self.collection_name, requests=batch_reqs
@@ -381,7 +394,10 @@ class QdrantHybridRetrieval:
 
         print("Executing Sparse Batch Search...")
         sparse_results_batch = []
-        for i in tqdm(range(0, len(sparse_requests), search_batch_size), desc="Sparse Search Batches"):
+        for i in tqdm(
+            range(0, len(sparse_requests), search_batch_size),
+            desc="Sparse Search Batches",
+        ):
             batch_reqs = sparse_requests[i : i + search_batch_size]
             batch_res = self.client.search_batch(
                 collection_name=self.collection_name, requests=batch_reqs
