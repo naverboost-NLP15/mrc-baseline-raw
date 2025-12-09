@@ -19,8 +19,7 @@ from datasets import (
     Value,
     load_from_disk,
 )
-from retrieval_hybrid import HybridRetrieval
-from retrieval import SparseRetrieval
+from retrieval_qdrant_final import QdrantHybridRetrieval
 from trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
@@ -121,18 +120,22 @@ def run_retrieval(
 ) -> DatasetDict:
 
     # Query에 맞는 Passage들을 Retrieval 합니다.
-    retriever = HybridRetrieval(
-        tokenize_fn=None, data_path=data_path, context_path=context_path
+    # QdrantHybridRetrieval 초기화 (tokenize_fn 제거, use_fp16 추가)
+    retriever = QdrantHybridRetrieval(
+        data_path=data_path,
+        context_path=context_path,
+        use_fp16=training_args.fp16,
     )
-    retriever.get_embedding()
 
-    # HybridRetrieval은 get_embedding()에서 이미 FAISS 준비를 마치고,
-    # retrieve()에서 Hybrid 검색을 수행합니다.
+    # HybridRetrieval은 retrieve()에서 Hybrid 검색을 수행합니다.
+    # 인자 매핑: bm25_weight/dense_weight -> alpha (dense_weight를 alpha로 사용)
+    # data_args에 alpha가 없으면 dense_weight를, 그것도 없으면 0.5를 사용
+    alpha = getattr(data_args, "alpha", getattr(data_args, "dense_weight", 0.5))
+
     df = retriever.retrieve(
         datasets["validation"],
         topk=data_args.top_k_retrieval,
-        bm25_weight=data_args.bm25_weight,
-        dense_weight=data_args.dense_weight,
+        alpha=alpha,
     )
 
     # test data 에 대해선 정답이 없으므로 id question context 로만 데이터셋이 구성됩니다.

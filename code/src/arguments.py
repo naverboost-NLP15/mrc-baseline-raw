@@ -100,3 +100,7 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "Whether to add KorQuad v1 dataset for training."},
     )
+    alpha: float = field(
+        default=0.5,
+        metadata={"help": "Weight for Dense retrieval. Sparse will get 1 - alpha."},
+    )
