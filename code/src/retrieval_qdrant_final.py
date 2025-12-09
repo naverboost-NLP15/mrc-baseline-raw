@@ -55,6 +55,7 @@ class QdrantHybridRetrieval:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         use_reranker: bool = True,
+        use_fp16: bool = False,
         reranker_model_name: str = "BAAI/bge-reranker-v2-m3",
         dense_model_name: str = "telepix/PIXIE-Spell-Preview-1.7B",
         sparse_model_name: str = "telepix/PIXIE-Splade-Preview",
@@ -139,13 +140,15 @@ class QdrantHybridRetrieval:
             print("Chunking 결과 저장 완료")
 
         # 2. Load Models
+        model_kwargs = {"torch_dtype": torch.float16} if use_fp16 and torch.cuda.is_available() else {}
+
         # Dense Encoder
-        print(f"Loading Dense Encoder: {self.dense_model_name}")
-        self.dense_encoder = SentenceTransformer(self.dense_model_name)
+        print(f"Loading Dense Encoder: {self.dense_model_name} (FP16={use_fp16})")
+        self.dense_encoder = SentenceTransformer(self.dense_model_name, model_kwargs=model_kwargs)
 
         # Sparse (SPLADE) Encoder
-        print(f"Loading Sparse (SPLADE) Model & Tokenizer: {self.sparse_model_name}")
-        self.sparse_encoder = SparseEncoder(self.sparse_model_name)
+        print(f"Loading Sparse (SPLADE) Model & Tokenizer: {self.sparse_model_name} (FP16={use_fp16})")
+        self.sparse_encoder = SparseEncoder(self.sparse_model_name, model_kwargs=model_kwargs)
         self.sparse_tokenizer = AutoTokenizer.from_pretrained(self.sparse_model_name)
         self.special_token_ids = set(self.sparse_tokenizer.all_special_ids)
 
@@ -183,7 +186,7 @@ class QdrantHybridRetrieval:
             self.reranker = CrossEncoder(
                 reranker_model_name,
                 device=device,
-                model_kwargs={"torch_dtype": torch.float16},
+                model_kwargs={"dtype": torch.float16 if use_fp16 else torch.float32},
             )
 
     def split_text(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
@@ -357,22 +360,33 @@ class QdrantHybridRetrieval:
         # B. Sparse Search Batch
         sparse_requests = [
             models.SearchRequest(
-                vector=models.NamedVector(name=sparse_type, vector=sparse_vec),
+                vector=models.NamedSparseVector(name=sparse_type, vector=sparse_vec),
                 limit=topn_candidate,
                 with_payload=False,
             )
             for sparse_vec in sparse_query_vecs
         ]
 
+        # Execute Search in Batches to avoid Timeout
+        search_batch_size = 64
+
         print("Executing Dense Batch Search...")
-        dense_results_batch = self.client.search_batch(
-            collection_name=self.collection_name, requests=dense_requests
-        )
+        dense_results_batch = []
+        for i in tqdm(range(0, len(dense_requests), search_batch_size), desc="Dense Search Batches"):
+            batch_reqs = dense_requests[i : i + search_batch_size]
+            batch_res = self.client.search_batch(
+                collection_name=self.collection_name, requests=batch_reqs
+            )
+            dense_results_batch.extend(batch_res)
 
         print("Executing Sparse Batch Search...")
-        sparse_results_batch = self.client.search_batch(
-            collection_name=self.collection_name, requests=sparse_requests
-        )
+        sparse_results_batch = []
+        for i in tqdm(range(0, len(sparse_requests), search_batch_size), desc="Sparse Search Batches"):
+            batch_reqs = sparse_requests[i : i + search_batch_size]
+            batch_res = self.client.search_batch(
+                collection_name=self.collection_name, requests=batch_reqs
+            )
+            sparse_results_batch.extend(batch_res)
 
         # 3. Fusion (RRF)
         print("Fusing Results...")
@@ -485,6 +499,11 @@ if __name__ == "__main__":
         "--sparse_model", type=str, default="telepix/PIXIE-Splade-Preview"
     )
     parser.add_argument("--no_reranker", dest="use_reranker", action="store_false")
+    parser.add_argument(
+        "--fp16",
+        action="store_true",
+        help="Use FP16 for models to save memory and speed up inference",
+    )
     parser.set_defaults(use_reranker=True)
 
     args = parser.parse_args()
@@ -510,6 +529,7 @@ if __name__ == "__main__":
         dense_model_name=args.dense_model,
         sparse_model_name=args.sparse_model,
         use_reranker=args.use_reranker,
+        use_fp16=args.fp16,
     )
 
     # Retrieve

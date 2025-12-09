@@ -292,3 +292,35 @@ uv run code/src/train.py \
 --overwrite_output_dir \
 --fp16 \
 --seed 42
+
+
+### "원본 + korquad" 후 "원본" 추가 파인튜닝
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/roberta_large_finetuned_final \
+--do_train \
+--do_eval \
+--model_name_or_path ./code/models/train_dataset/roberta_large_korquad \
+--dataset_name raw/data/train_dataset \
+--add_korquad False \
+\
+--per_device_train_batch_size 16 \
+--gradient_accumulation_steps 2 \
+--per_device_eval_batch_size 32 \
+\
+--learning_rate 1e-5 \
+--weight_decay 0.01 \
+--num_train_epochs 5 \
+--warmup_ratio 0.1 \
+\
+--logging_steps 100 \
+--eval_strategy steps \
+--eval_steps 100 \
+--save_steps 100 \
+--save_total_limit 2 \
+\
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--overwrite_output_dir \
+--fp16 \
+--seed 42
+(참고: LR은 `1e-5`로 낮춰서 조심스럽게 다듬는 것이 포인트입니다.)
