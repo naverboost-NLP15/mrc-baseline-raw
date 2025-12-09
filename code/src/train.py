@@ -8,7 +8,7 @@ import evaluate
 from typing import NoReturn
 
 from arguments import DataTrainingArguments, ModelArguments
-from datasets import DatasetDict, load_from_disk
+from datasets import DatasetDict, load_from_disk, load_dataset, concatenate_datasets
 from trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
@@ -78,6 +78,47 @@ def main():
 
     datasets = load_from_disk(data_args.dataset_name)
     print(datasets)
+
+    if data_args.add_korquad:
+        print("Adding KorQuad v1 dataset...")
+        korquad = load_dataset("squad_kor_v1")
+        
+        # KorQuad train dataset
+        kq_train = korquad["train"]
+
+        # Align features
+        if "train" in datasets:
+            org_train = datasets["train"]
+            
+            # Check for 'answers' feature compatibility (Sequence vs plain)
+            # KorQuad 'answers' feature might need casting if the original dataset uses a specific Sequence structure
+            # However, typically they are compatible. 
+            # We filter columns to match the original dataset's columns that exist in KorQuad
+            
+            common_columns = [col for col in org_train.column_names if col in kq_train.column_names]
+            
+            # If 'title' is in KorQuad but not in original, it's dropped by the intersection.
+            # If original has 'document_id' but KorQuad doesn't, we might have an issue if we just select common columns
+            # because concatenate requires exact same columns.
+            
+            # Strategy: Add missing columns to KorQuad with None/Default, or drop extra columns from original?
+            # Usually, training only needs context, question, answers, id. 
+            # Let's try to keep essential columns + whatever matches.
+            
+            kq_train = kq_train.select_columns(common_columns)
+            
+            # If original has extra columns not in KorQuad (e.g. document_id), we might need to remove them from original for concatenation
+            # OR add them to KorQuad.
+            # Safe approach: Only keep columns present in BOTH for the training set.
+            
+            org_train_filtered = org_train.select_columns(common_columns)
+            
+            # Cast features of KorQuad to match original (e.g. string vs Value('string'))
+            kq_train = kq_train.cast(org_train_filtered.features)
+            
+            combined_train = concatenate_datasets([org_train_filtered, kq_train])
+            datasets["train"] = combined_train
+            print(f"Added KorQuad. New train size: {len(datasets['train'])}")
 
     # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
     # argument로 원하는 모델 이름을 설정하면 옵션을 바꿀 수 있습니다.
@@ -286,7 +327,7 @@ def run_mrc(
             prepare_validation_features,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
-            remove_columns=column_names,
+            remove_columns=eval_dataset.column_names,
             load_from_cache_file=not data_args.overwrite_cache,
         )
 

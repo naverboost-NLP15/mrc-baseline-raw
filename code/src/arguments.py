@@ -96,3 +96,7 @@ class DataTrainingArguments:
     dense_weight: float = field(
         default=1.0, metadata={"help": "Weight for Dense retrieval."}
     )
+    add_korquad: bool = field(
+        default=False,
+        metadata={"help": "Whether to add KorQuad v1 dataset for training."},
+    )
