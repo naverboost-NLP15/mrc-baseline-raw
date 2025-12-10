@@ -1,76 +1,192 @@
-# 대회 소개
+# 개선된 베이스라인 가이드 (Qdrant & Hybrid Retrieval)
 
-"서울의 GDP는 세계 몇 위야?", "MRC가 뭐야?"
+## 소개
 
-우리는 궁금한 것들이 생겼을 때, 아주 당연하게 검색엔진을 활용하여 검색을 합니다. 이런 검색엔진은 최근 기계독해 (MRC, Machine Reading Comprehension) 기술을 활용하며 매일 발전하고 있는데요. 본 대회에서는 우리가 당연하게 활용하던 검색엔진, 그것과 유사한 형태의 시스템을 만들어 볼 것입니다.
+이 코드는 기존 MRC 베이스라인을 기반으로 **Qdrant 벡터 DB를 활용한 Hybrid Retrieval(Dense + SPLADE)** 및 **KorQuad 데이터셋 추가 학습** 기능을 포함하여 성능을 개선한 버전입니다.
 
-Question Answering (QA)은 다양한 종류의 질문에 대해 대답하는 인공지능을 만드는 연구 분야입니다.
-다양한 QA 시스템 중, Open-Domain Question Answering (ODQA) 은 주어지는 지문이 따로 존재하지 않고 사전에 구축되어있는 Knowledge resource 에서 질문에 대답할 수 있는 문서를 찾는 과정이 추가되기 때문에 더 어려운 문제입니다.
+## 주요 변경 사항
+
+1.  **Hybrid Retrieval**: Qdrant를 사용하여 Dense Vector(예: BGE-M3, PIXIE)와 Sparse Vector(SPLADE/BM25)를 결합한 하이브리드 검색을 수행합니다.
+2.  **Vector DB**: FAISS, 로컬 Pickle 대신 Qdrant를 사용하여 대규모 벡터 검색 및 필터링을 효율적으로 처리합니다.
+3.  **KorQuad 학습**: 학습 시 `--add_korquad` 옵션을 통해 KorQuad v1.0 데이터를 추가하여 MRC 모델의 일반화 성능을 높일 수 있습니다.
+4.  **Reranking**: 검색된 문서에 대해 Reranker 모델(BGE-Reranker 등)을 사용하여 검색 정밀도를 높입니다.
+
+## 설치 및 환경 설정
+
+### 요구 사항
+
+필요한 패키지를 설치합니다.
+```bash
+pip install -r requirements.txt
+```
+
+### Qdrant 서버 설정
+
+이 베이스라인은 외부 또는 로컬 Qdrant 서버가 필요합니다. 
+`src/qdrant_indexing/build_qdrant_hybrid_index.py` 및 `src/retrieval_qdrant_final.py` 내의 `QDRANT_HOST`, `QDRANT_PORT`, `api_key` 설정을 본인의 환경에 맞게 수정해야 할 수 있습니다. 
+
+> **참고**: 현재 기본 설정은 `lori2mai11ya.asuscomm.com:6333`으로 되어 있습니다.
+
+## 데이터 구축 (Indexing)
+
+ODQA 수행 전, 위키피디아 문서를 Qdrant에 인덱싱해야 합니다. 인덱싱 스크립트는 Dense와 Sparse 임베딩을 모두 생성하여 저장합니다.
+
+```bash
+# Qdrant에 하이브리드 인덱스 구축 (Dense + SPLADE + BM25)
+python src/qdrant_indexing/build_qdrant_hybrid_index.py \
+    --data_path ../data \
+    --context_path wikipedia_documents.json \
+    --dense_model_name "telepix/PIXIE-Spell-Preview-1.7B" \
+    --sparse_model_name "telepix/PIXIE-Splade-Preview" \
+    --collection_name "wiki_hybrid_PIXIE_splade_bm25"
+```
+*   위 스크립트는 청크 단위로 분할된 문서를 임베딩하여 업로드합니다.
+*   GPU 환경에서 실행하는 것을 권장합니다.
+
+## 실행 방법
+
+### 1. Train (MRC 모델 학습)
+
+`train.py`는 MRC(Reader) 모델을 학습합니다. `--add_korquad` 플래그를 사용하여 KorQuad 1.0 데이터를 학습 데이터에 추가할 수 있습니다.
+
+```bash
+python src/train.py \
+    --output_dir ./models/train_dataset \
+    --do_train \
+    --dataset_name ../data/train_dataset \
+    --add_korquad True \
+    --num_train_epochs 3
+```
+
+### 2. Eval (평가)
+
+학습된 모델을 검증 데이터셋(Validation set)으로 평가합니다.
+
+```bash
+python src/train.py \
+    --output_dir ./outputs/train_dataset \
+    --model_name_or_path ./models/train_dataset \
+    --do_eval \
+    --dataset_name ../data/train_dataset
+```
+
+### 3. Inference (ODQA 추론)
+
+Qdrant를 이용한 검색과 학습된 MRC 모델을 결합하여 최종 답변을 생성합니다. `inference.py`는 내부적으로 `QdrantHybridRetrieval`을 사용합니다.
+
+```bash
+python src/inference.py \
+    --output_dir ./outputs/test_dataset/ \
+    --dataset_name ../data/test_dataset/ \
+    --model_name_or_path ./models/train_dataset/ \
+    --do_predict \
+    --top_k_retrieval 10 \
+    --eval_retrieval True \
+    --dense_weight 0.5 \
+    --fp16
+```
+*   `--dense_weight`: Hybrid 검색 시 Dense Vector의 가중치입니다. (0.0 ~ 1.0). Sparse 가중치는 `1.0 - dense_weight`가 됩니다.
+*   `--fp16`: 인퍼런스 시 모델을 fp16으로 로드하여 속도를 높입니다.
+
+## 파일 구성
+
+```bash
+code/
+├── assets/                # 이미지 리소스
+├── src/
+│   ├── retrieval_qdrant_final.py # Qdrant 기반 Hybrid Retrieval 클래스
+│   ├── inference.py              # ODQA 추론 (QdrantHybridRetrieval 사용)
+│   ├── train.py                  # MRC 학습 (KorQuad 추가 가능)
+│   ├── trainer_qa.py             # QA Trainer
+│   ├── arguments.py              # 실행 인자 정의
+│   ├── utils_qa.py               # QA 유틸리티
+│   └── qdrant_indexing/
+│       └── build_qdrant_hybrid_index.py # Qdrant 인덱싱 스크립트
+├── requirements.txt       # 의존성 패키지 목록
+└── README.md              # 가이드 문서 (본 파일)
+```
+
+## 주의 사항
+
+1.  **Qdrant 연결**: `retrieval_qdrant_final.py`와 `build_qdrant_hybrid_index.py` 상단의 호스트 설정을 확인하세요. 서버가 실행 중이어야 검색이 가능합니다.
+2.  **Collection 매칭**: 인덱싱할 때 생성한 `collection_name`이 `retrieval_qdrant_final.py`에서 참조하는 이름과 일치하는지 확인하세요. (기본값: `hybird_collection_v1` 또는 모델명 기반 자동 생성)
+3.  **Overwrite Cache**: 모델 학습 시 `--overwrite_cache`를 사용하지 않으면 이전 캐시된 데이터가 로드될 수 있습니다. 데이터나 전처리가 변경되었다면 캐시를 덮어써주세요.
 
 
+## 현재 리더보드에 올라온 모델 진행방식
 
-본 ODQA 대회에서 우리가 만들 모델은 two-stage로 구성되어 있습니다. 첫 단계는 질문에 관련된 문서를 찾아주는 "retriever" 단계이고, 다음으로는 관련된 문서를 읽고 적절한 답변을 찾거나 만들어주는 "reader" 단계입니다. 두 가지 단계를 각각 구성하고 그것들을 적절히 통합하게 되면, 어려운 질문을 던져도 답변을 해주는 ODQA 시스템을 여러분들 손으로 직접 만들어보게 됩니다.
-
-따라서, 대회는 더 정확한 답변을 내주는 모델을 만드는 팀이 좋은 성적을 거두게 됩니다.
-
-
-
-최종적으로 테스트해야하는 결과물은
-
-input: Query만 주어집니다.
-
-output: 주어진 Query에 알맞는 string 형태의 답안
-
-
-# 평가 방법
-두 가지 평가지표를 사용합니다.
-
-Exact Match (EM): 모델의 예측과, 실제 답이 정확하게 일치할 때만 점수가 주어집니다. 즉 모든 질문은 0점 아니면 1점으로 처리됩니다. 단, 띄어쓰기나 "."과 같은 문자가 포함되어 있다고 오답으로 처리되면 억울하겠죠? 이런 것은 제외한 후 정답에 대해서만 일치하는지 확인합니다. 또한 답이 하나가 아닐 수 있는데, 이런 경우는 하나라도 일치하면 정답으로 간주합니다.
+- `klue/roberta-large` 모델 사용
+- `train_data` + `korquad` 로 1차 파인튜닝
+- `train_data` 로 2차 파인튜닝(이게 더 좋은 방법인지는 모르겠습니다.)
+  - 2차 파인튜닝 결과
+    - EM: 70.83 -> 71.67 상승
+    - F1: 80.88 -> 80.69 소폭 하락?
+- topk = 1
+  - 현재 topk 개의 문서를 join해서 하나의 text로 만드는 과정에서 문제가 있어 보임
+  - 문제를 해결하면 top k를 늘렸을 때 더 좋은 성능이 나올 것으로 예상됨.
 
 
+### 1차 학습 스크립트 및 하이퍼파라미터
+```bash
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/{roberta_large_korquad} \
+--do_train \
+--do_eval \
+--model_name_or_path klue/roberta-large \
+--dataset_name raw/data/train_dataset \
+--add_korquad True \
+\
+--per_device_train_batch_size 4 \
+--gradient_accumulation_steps 8 \
+--per_device_eval_batch_size 32 \
+\
+--learning_rate 1.5e-5 \
+--weight_decay 0.01 \
+--num_train_epochs 3 \
+--warmup_ratio 0.1 \
+\
+--logging_steps 500 \
+--eval_strategy steps \
+--eval_steps 500 \
+--save_steps 500 \
+--save_total_limit 2 \
+\
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--overwrite_output_dir \
+--fp16 \
+--seed 42
+```
 
-F1 Score: EM과 다르게 부분 점수를 제공합니다. 예를 들어, 정답은 "Barack Obama"지만 예측이 "Obama"일 때, EM의 경우 0점을 받겠지만 F1 Score는 겹치는 단어도 있는 것을 고려해 부분 점수를 받을 수 있습니다.
+### 2차 학습 스크립트 및 하이퍼파라미터
 
-
-
-EM 기준으로 리더보드 등수가 반영되고, F1은 참고용으로만 활용됩니다.
-
-리더보드 표기 방식
-리더보드에는 EM 및 F1이 소수점 넷째 자리까지 표시됩니다. (예시: 팀 A: 58.7903%)
-
-# 세부 일정
-
-프로젝트 전체 기간 (2주) : 12월 1일 (월) 10:00 ~ 12월 11일 (목) 19:00
-
-# 룰
-
-대회 룰
-
-[대회 참여 제한] NLP 도메인을 수강하고 있는 캠퍼에 한하여 리더보드 제출이 가능합니다.
-
-[팀 결성 기간] AI Stages 내 팀 결성은 대회 페이지 공개 후 2일차 오후 4시까지 필수로 진행해 주세요. 팀이 완전히 결성되기 전까지는 리더보드 제출이 불가합니다.
-
-[일일 제출횟수] 일일 제출횟수는 '팀 단위 10회'로 제한합니다. (일일횟수 초기화 자정 진행)
-
-[외부 데이터셋 규정] KLUE-MRC 데이터셋을 제외한 모든 외부 데이터 사용 허용합니다.
-
-[기학습 가중치 사용] 기학습 가중치는 제한 없이 모두 허용하나, KLUE MRC 데이터로 학습된 기학습 가중치 (pretrained weight) 사용은 금지합니다. 가중치는 모두 public 에 공개되어 있고 저작권 문제 없이 누구나 사용 가능해야 합니다. 사용하는 기학습 가중치는 공지 게시판의 ‘기학습 가중치 사용 공지’ 게시글에 댓글로 가중치 및 접근 가능한 링크를 반드시 공유합니다. 이미 공유되어 있을 경우 추가로 공유주실 필요는 없습니다.
-
-[평가 데이터 활용] 학습 효율 측면에서 테스트셋을 분석하고 사용(학습)하는 행위는 본 대회에서는 금지합니다. (눈으로 직접 판별 후 라벨링 하는 행위 포함)
-
-[데이터셋 저작권] 대회 데이터셋은 '캠프 교육용 라이선스' 아래 사용 가능합니다. 저작권 관련 세부 내용은 부스트코스 공지사항을 반드시 참고 해주세요.
-
-AI Stages 대회 공통사항
-
-[Private Sharing 금지] 비공개적으로 다른 팀과 코드 혹은 데이터를 공유하는 것은 허용하지 않습니다.
-코드 공유는 반드시 대회 게시판을 통해 공개적으로 진행되어야 합니다.
-
-[최종 결과 검증 절차] 리더보드 상위권 대상으로 추후 코드 검수가 필요한 대상으로 판단될 경우 개별 연락을 통해 추가 검수 절차를 안내드릴 수 있습니다. 반드시 결과가 재현될 수 있도록 최종 코드를 정리 부탁드립니다. 부정행위가 의심될 경우에는 결과 재현을 요구할 수 있으며, 재현이 어려울 경우 리더보드 순위표에서 제외될 수 있습니다.
-
-[공유 문화] 공개적으로 토론 게시판을 통해 모델링에 대한 아이디어 혹은 작성한 코드를 공유하실 것을 권장 드립니다. 공유 문화를 통해서 더욱 뛰어난 모델을 대회 참가자 분들과 같이 개발해 보시길 바랍니다.
-
-[대회 참가 기본 매너] 좋은 대회 문화 정착을 위해 아래 명시된 행위는 지양합니다.
-
-대회 종료를 앞두고 (3일 전) 높은 점수를 얻을 수 있는 전체 코드를 공유하는 행위
-
-타 참가자와 토론이 아닌 단순 솔루션을 캐내는 행위
+```bash
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/baseline_korquad_opt_finetuned_final \
+--do_train \
+--do_eval \
+--model_name_or_path ./code/models/train_dataset/baseline_korquad_opt \
+--dataset_name raw/data/train_dataset \
+--add_korquad False \
+\
+--per_device_train_batch_size 16 \
+--gradient_accumulation_steps 2 \
+--per_device_eval_batch_size 32 \
+\
+--learning_rate 1e-5 \
+--weight_decay 0.01 \
+--num_train_epochs 5 \
+--warmup_ratio 0.1 \
+\
+--logging_steps 100 \
+--eval_strategy steps \
+--eval_steps 100 \
+--save_steps 100 \
+--save_total_limit 2 \
+\
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--overwrite_output_dir \
+--fp16 \
+--seed 42
+```
