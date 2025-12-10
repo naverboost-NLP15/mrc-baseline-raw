@@ -1,16 +1,5 @@
 # 개선된 베이스라인 가이드 (Qdrant & Hybrid Retrieval)
 
-## 소개
-
-이 코드는 기존 MRC 베이스라인을 기반으로 **Qdrant 벡터 DB를 활용한 Hybrid Retrieval(Dense + SPLADE)** 및 **KorQuad 데이터셋 추가 학습** 기능을 포함하여 성능을 개선한 버전입니다.
-
-## 주요 변경 사항
-
-1.  **Hybrid Retrieval**: Qdrant를 사용하여 Dense Vector(예: BGE-M3, PIXIE)와 Sparse Vector(SPLADE/BM25)를 결합한 하이브리드 검색을 수행합니다.
-2.  **Vector DB**: FAISS, 로컬 Pickle 대신 Qdrant를 사용하여 대규모 벡터 검색 및 필터링을 효율적으로 처리합니다.
-3.  **KorQuad 학습**: 학습 시 `--add_korquad` 옵션을 통해 KorQuad v1.0 데이터를 추가하여 MRC 모델의 일반화 성능을 높일 수 있습니다.
-4.  **Reranking**: 검색된 문서에 대해 Reranker 모델(BGE-Reranker 등)을 사용하여 검색 정밀도를 높입니다.
-
 ## 설치 및 환경 설정
 
 ### 요구 사항
@@ -22,26 +11,15 @@ uv sync
 
 ### Qdrant 서버 설정
 
-이 베이스라인은 외부 또는 로컬 Qdrant 서버가 필요합니다. 
+이 베이스라인은 외부 또는 로컬 Qdrant 서버(석진님께서 제공)가 필요합니다. 
 `src/qdrant_indexing/build_qdrant_hybrid_index.py` 및 `src/retrieval_qdrant_final.py` 내의 `QDRANT_HOST`, `QDRANT_PORT`, `api_key` 설정을 본인의 환경에 맞게 수정해야 할 수 있습니다. 
 
 > **참고**: 현재 기본 설정은 `lori2mai11ya.asuscomm.com:6333`으로 되어 있습니다.
 
 ## 데이터 구축 (Indexing)
 
-ODQA 수행 전, 위키피디아 문서를 Qdrant에 인덱싱해야 합니다. 인덱싱 스크립트는 Dense와 Sparse 임베딩을 모두 생성하여 저장합니다.
-
-```bash
-# Qdrant에 하이브리드 인덱스 구축 (Dense + SPLADE + BM25)
-python src/qdrant_indexing/build_qdrant_hybrid_index.py \
-    --data_path ../data \
-    --context_path wikipedia_documents.json \
-    --dense_model_name "telepix/PIXIE-Spell-Preview-1.7B" \
-    --sparse_model_name "telepix/PIXIE-Splade-Preview" \
-    --collection_name "wiki_hybrid_PIXIE_splade_bm25"
-```
-*   위 스크립트는 청크 단위로 분할된 문서를 임베딩하여 업로드합니다.
-*   GPU 환경에서 실행하는 것을 권장합니다.
+~~ODQA 수행 전, 위키피디아 문서를 Qdrant에 인덱싱해야 합니다. 인덱싱 스크립트는 Dense와 Sparse 임베딩을 모두 생성하여 저장합니다.~~
+이미 인덱싱되어 있음.
 
 ## 실행 방법
 
