@@ -17,7 +17,7 @@
 
 필요한 패키지를 설치합니다.
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 ### Qdrant 서버 설정
