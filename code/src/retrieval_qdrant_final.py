@@ -437,6 +437,7 @@ class QdrantHybridRetrieval:
 
             # 4. Reranking
             final_indices = []
+            final_scores = []
             if self.use_reranker and self.reranker:
                 pairs = []
                 candidates_indices = [c[0] for c in rerank_candidates]
@@ -450,12 +451,21 @@ class QdrantHybridRetrieval:
                     zip(candidates_indices, rerank_scores), key=lambda x: -x[1]
                 )
                 final_indices = [x[0] for x in reranked_results[:topk]]
+                final_scores = [float(x[1]) for x in reranked_results[:topk]]
             else:
                 final_indices = [x[0] for x in rerank_candidates[:topk]]
+                final_scores = [float(x[1]) for x in rerank_candidates[:topk]]
 
             # Result Construction
-            context = "\n\n".join([self.texts[idx] for idx in final_indices])
-            retrieved_doc_ids = [self.doc_ids[idx] for idx in final_indices]
+            contexts_list = []
+            for i_idx, idx in enumerate(final_indices):
+                contexts_list.append(
+                    {
+                        "text": self.texts[idx],
+                        "doc_id": self.doc_ids[idx],
+                        "score": final_scores[i_idx],
+                    }
+                )
 
             tmp = {
                 "question": query,
@@ -464,8 +474,7 @@ class QdrantHybridRetrieval:
                     if isinstance(query_or_dataset, Dataset)
                     else i
                 ),
-                "context": context,
-                "retrieved_doc_ids": retrieved_doc_ids,
+                "contexts": contexts_list,
             }
 
             if isinstance(query_or_dataset, Dataset):
@@ -531,6 +540,12 @@ if __name__ == "__main__":
         "--wandb_entity", type=str, default=None, help="WandB entity name"
     )
     parser.add_argument("--wandb_name", type=str, default=None, help="WandB run name")
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        default=None,
+        help="Path to save retrieval results (json)",
+    )
 
     args = parser.parse_args()
 
@@ -576,12 +591,20 @@ if __name__ == "__main__":
             sparse_type=args.sparse_type,
         )
 
+    # Save Results
+    if args.output_path:
+        os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
+        print(f"Saving results to {args.output_path}...")
+        df.to_json(args.output_path, orient="records", force_ascii=False, indent=4)
+
     # Evaluation
     if "answers" in df.columns:
         correct_count = 0
         for idx, row in df.iterrows():
             answer_texts = row["answers"]["text"]
-            if any(ans in row["context"] for ans in answer_texts):
+            # Reconstruct context from the list for evaluation
+            full_context = " ".join([c["text"] for c in row["contexts"]])
+            if any(ans in full_context for ans in answer_texts):
                 correct_count += 1
         acc = correct_count / len(df)
         print(f"Top-{args.topk} Accuracy: {acc:.4f}")
