@@ -12,20 +12,17 @@ uv sync
 ### Qdrant 서버 설정
 
 이 베이스라인은 외부 또는 로컬 Qdrant 서버(석진님께서 제공)가 필요합니다. 
-`src/qdrant_indexing/build_qdrant_hybrid_index.py` 및 `src/retrieval_qdrant_final.py` 내의 `QDRANT_HOST`, `QDRANT_PORT`, `api_key` 설정을 본인의 환경에 맞게 수정해야 할 수 있습니다. 
+`src/retrieval_qdrant_final.py` 내의 `QDRANT_HOST`, `QDRANT_PORT`, `api_key` 설정을 본인의 환경에 맞게 수정해야 할 수 있습니다. 
 
 > **참고**: 현재 기본 설정은 `lori2mai11ya.asuscomm.com:6333`으로 되어 있습니다.
 
-## 데이터 구축 (Indexing)
-
-~~ODQA 수행 전, 위키피디아 문서를 Qdrant에 인덱싱해야 합니다. 인덱싱 스크립트는 Dense와 Sparse 임베딩을 모두 생성하여 저장합니다.~~
-이미 인덱싱되어 있음.
 
 ## 실행 방법
 
 ### 1. Train (MRC 모델 학습)
 
-`train.py`는 MRC(Reader) 모델을 학습합니다. `--add_korquad` 플래그를 사용하여 KorQuad 1.0 데이터를 학습 데이터에 추가할 수 있습니다.
+`train.py`는 extractive MRC(Reader) 모델을 학습합니다. 
+`--add_korquad` 플래그를 사용하여 KorQuad 1.0 데이터를 학습 데이터에 추가할 수 있습니다.
 
 ```bash
 python src/train.py \
@@ -60,10 +57,10 @@ python src/inference.py \
     --do_predict \
     --top_k_retrieval 10 \
     --eval_retrieval True \
-    --dense_weight 0.5 \
+    --alpha 0.5 \
     --fp16
 ```
-*   `--dense_weight`: Hybrid 검색 시 Dense Vector의 가중치입니다. (0.0 ~ 1.0). Sparse 가중치는 `1.0 - dense_weight`가 됩니다.
+*   `--alpha`: Hybrid 검색 시 Dense Vector의 가중치입니다. (기본값 0.5). Sparse 가중치는 `1.0 - alpha`가 됩니다.
 *   `--fp16`: 인퍼런스 시 모델을 fp16으로 로드하여 속도를 높입니다.
 
 ## 파일 구성
