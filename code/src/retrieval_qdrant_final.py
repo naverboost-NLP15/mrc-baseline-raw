@@ -50,7 +50,7 @@ def hash_token(token):
 class QdrantHybridRetrieval:
     def __init__(
         self,
-        data_path: str = "./raw/data",
+        data_path: str = "raw/data",
         context_path: str = "wikipedia_documents.json",
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
