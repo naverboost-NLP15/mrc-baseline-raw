@@ -87,16 +87,13 @@ uv run code/src/inference.py \
 
 ```bash
 code/
-├── assets/                # 이미지 리소스
 ├── src/
 │   ├── retrieval_qdrant_final.py # Qdrant 기반 Hybrid Retrieval 클래스
 │   ├── inference.py              # ODQA 추론 (QdrantHybridRetrieval 사용)
 │   ├── train.py                  # MRC 학습 (KorQuad 추가 가능)
 │   ├── trainer_qa.py             # QA Trainer
 │   ├── arguments.py              # 실행 인자 정의
-│   ├── utils_qa.py               # QA 유틸리티
-│   └── qdrant_indexing/
-│       └── build_qdrant_hybrid_index.py # Qdrant 인덱싱 스크립트
+│   └── utils_qa.py               # QA 유틸리티
 └── README.md              # 가이드 문서 (본 파일)
 ```
 
