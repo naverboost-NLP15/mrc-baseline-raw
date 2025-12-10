@@ -19,49 +19,66 @@ uv sync
 
 ## 실행 방법
 
-### 1. Train (MRC 모델 학습)
+### 1. Train (MRC 모델 학습) 및 Eval
 
 `train.py`는 extractive MRC(Reader) 모델을 학습합니다. 
 `--add_korquad` 플래그를 사용하여 KorQuad 1.0 데이터를 학습 데이터에 추가할 수 있습니다.
 
-```bash
-python src/train.py \
-    --output_dir ./models/train_dataset \
-    --do_train \
-    --dataset_name ../data/train_dataset \
-    --add_korquad True \
-    --num_train_epochs 3
-```
-
-### 2. Eval (평가)
-
-학습된 모델을 검증 데이터셋(Validation set)으로 평가합니다.
+- 하단은 제가 진행했던 1차 학습 스크립트 예시이며, 2차 학습 스크립트는 README 하단에 기재해 두었습니다.
 
 ```bash
-python src/train.py \
-    --output_dir ./outputs/train_dataset \
-    --model_name_or_path ./models/train_dataset \
-    --do_eval \
-    --dataset_name ../data/train_dataset
+uv run code/src/train.py \
+--output_dir code/models/train_dataset/모델저장경로 \
+--do_train \
+--do_eval \
+--model_name_or_path klue/roberta-large \
+--dataset_name raw/data/train_dataset \
+--add_korquad True \
+\
+--per_device_train_batch_size 4 \
+--gradient_accumulation_steps 8 \
+--per_device_eval_batch_size 32 \
+\
+--learning_rate 1.5e-5 \
+--weight_decay 0.01 \
+--num_train_epochs 3 \
+--warmup_ratio 0.1 \
+\
+--logging_steps 500 \
+--eval_strategy steps \
+--eval_steps 500 \
+--save_steps 500 \
+--save_total_limit 2 \
+\
+--load_best_model_at_end \
+--metric_for_best_model exact_match \
+--overwrite_output_dir \
+--fp16 \
+--seed 42
 ```
 
-### 3. Inference (ODQA 추론)
+### 2. Inference (ODQA 추론)
 
 Qdrant를 이용한 검색과 학습된 MRC 모델을 결합하여 최종 답변을 생성합니다. `inference.py`는 내부적으로 `QdrantHybridRetrieval`을 사용합니다.
 
-```bash
-python src/inference.py \
-    --output_dir ./outputs/test_dataset/ \
-    --dataset_name ../data/test_dataset/ \
-    --model_name_or_path ./models/train_dataset/ \
-    --do_predict \
-    --top_k_retrieval 10 \
-    --eval_retrieval True \
-    --alpha 0.5 \
-    --fp16
-```
+
+*   `--do_eval`: eval 데이터로 추론
+*   `--do_predict`: test 데이터로 추론(제출 직전에 사용)
 *   `--alpha`: Hybrid 검색 시 Dense Vector의 가중치입니다. (기본값 0.5). Sparse 가중치는 `1.0 - alpha`가 됩니다.
-*   `--fp16`: 인퍼런스 시 모델을 fp16으로 로드하여 속도를 높입니다.
+*   `--fp16`: 인퍼런스 시 모델(Splade, Spell2, Reranking)을 fp16으로 로드하여 속도를 높입니다.
+
+**example**
+
+```bash
+uv run code/src/inference.py \
+--output_dir code/predictions/baseline_real \
+--dataset_name raw/data/train_dataset/ \
+--model_name_or_path code/models/train_dataset/roberta_large_korquad \
+--eval_retrieval \
+--top_k_retrieval 1 \
+--do_eval \
+--alpha 0.5
+```
 
 ## 파일 구성
 
@@ -83,9 +100,8 @@ code/
 
 ## 주의 사항
 
-1.  **Qdrant 연결**: `retrieval_qdrant_final.py`와 `build_qdrant_hybrid_index.py` 상단의 호스트 설정을 확인하세요. 서버가 실행 중이어야 검색이 가능합니다.
-2.  **Collection 매칭**: 인덱싱할 때 생성한 `collection_name`이 `retrieval_qdrant_final.py`에서 참조하는 이름과 일치하는지 확인하세요. (기본값: `hybird_collection_v1` 또는 모델명 기반 자동 생성)
-3.  **Overwrite Cache**: 모델 학습 시 `--overwrite_cache`를 사용하지 않으면 이전 캐시된 데이터가 로드될 수 있습니다. 데이터나 전처리가 변경되었다면 캐시를 덮어써주세요.
+1.  **Collection 매칭**: 인덱싱할 때 생성한 `collection_name`이 `retrieval_qdrant_final.py`에서 참조하는 이름과 일치하는지 확인하세요. (기본값: `hybird_collection_v1` 또는 모델명 기반 자동 생성)
+2.  **Overwrite Cache**: 모델 학습 시 `--overwrite_cache`를 사용하지 않으면 이전 캐시된 데이터가 로드될 수 있습니다. 데이터나 전처리가 변경되었다면 캐시를 덮어써주세요.
 
 
 ## 현재 리더보드에 올라온 모델 진행방식
@@ -104,7 +120,7 @@ code/
 ### 1차 학습 스크립트 및 하이퍼파라미터
 ```bash
 uv run code/src/train.py \
---output_dir code/models/train_dataset/{roberta_large_korquad} \
+--output_dir code/models/train_dataset/모델저장경로 \
 --do_train \
 --do_eval \
 --model_name_or_path klue/roberta-large \
@@ -164,4 +180,30 @@ uv run code/src/train.py \
 --overwrite_output_dir \
 --fp16 \
 --seed 42
+```
+
+
+
+### Eval data 추론(with retriever)
+```bash
+uv run code/src/inference.py \
+--output_dir code/predictions/baseline_real \
+--dataset_name raw/data/train_dataset/ \
+--model_name_or_path code/models/train_dataset/roberta_large_korquad \
+--eval_retrieval \
+--top_k_retrieval 1 \
+--do_eval \
+--alpha 0.5
+```
+
+### Test data 추론(with retriever)
+```bash
+uv run code/src/inference.py \
+--output_dir code/predictions/예측결과저장경로 \
+--dataset_name raw/data/test_dataset/ \
+--model_name_or_path code/models/train_dataset/추론에사용될모델경로 \
+--eval_retrieval \
+--top_k_retrieval 1 \
+--do_predict \
+--alpha 0.5
 ```
