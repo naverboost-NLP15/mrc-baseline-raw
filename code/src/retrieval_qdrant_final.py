@@ -5,6 +5,7 @@ import pickle
 import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
+import wandb
 from contextlib import contextmanager
 from typing import List, Union, Optional
 from datasets import Dataset
@@ -50,7 +51,7 @@ def hash_token(token):
 class QdrantHybridRetrieval:
     def __init__(
         self,
-        data_path: str = "raw/data",
+        data_path: str = "./raw/data",
         context_path: str = "wikipedia_documents.json",
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
@@ -522,7 +523,20 @@ if __name__ == "__main__":
     )
     parser.set_defaults(use_reranker=True)
 
+    # WandB arguments
+    parser.add_argument("--wandb_project", type=str, default="QDQA_Retrieval", help="WandB project name")
+    parser.add_argument("--wandb_entity", type=str, default=None, help="WandB entity name")
+    parser.add_argument("--wandb_name", type=str, default=None, help="WandB run name")
+
     args = parser.parse_args()
+
+    # Initialize WandB
+    wandb.init(
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        name=args.wandb_name,
+        config=vars(args),
+    )
 
     # Load Dataset
     print(f"Loading dataset from {args.dataset_name}...")
@@ -567,3 +581,9 @@ if __name__ == "__main__":
                 correct_count += 1
         acc = correct_count / len(df)
         print(f"Top-{args.topk} Accuracy: {acc:.4f}")
+
+        wandb.log({
+            f"top{args.topk}_accuracy": acc,
+            "correct_count": correct_count,
+            "total_count": len(df),
+        })
