@@ -85,6 +85,8 @@ uv run code/src/inference.py \
 
 ## 파일 구성
 
+- code/src/dummy, qdrant_indexing은 학습 및 추론에 사용되지 않는 파일들이라, 따로 두었습니다.
+
 ```bash
 code/
 ├── src/
