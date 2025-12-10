@@ -524,8 +524,12 @@ if __name__ == "__main__":
     parser.set_defaults(use_reranker=True)
 
     # WandB arguments
-    parser.add_argument("--wandb_project", type=str, default="QDQA_Retrieval", help="WandB project name")
-    parser.add_argument("--wandb_entity", type=str, default=None, help="WandB entity name")
+    parser.add_argument(
+        "--wandb_project", type=str, default="QDQA_Retrieval", help="WandB project name"
+    )
+    parser.add_argument(
+        "--wandb_entity", type=str, default=None, help="WandB entity name"
+    )
     parser.add_argument("--wandb_name", type=str, default=None, help="WandB run name")
 
     args = parser.parse_args()
@@ -582,8 +586,10 @@ if __name__ == "__main__":
         acc = correct_count / len(df)
         print(f"Top-{args.topk} Accuracy: {acc:.4f}")
 
-        wandb.log({
-            f"top{args.topk}_accuracy": acc,
-            "correct_count": correct_count,
-            "total_count": len(df),
-        })
+        wandb.log(
+            {
+                f"top{args.topk}_accuracy": acc,
+                "correct_count": correct_count,
+                "total_count": len(df),
+            }
+        )
