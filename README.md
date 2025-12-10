@@ -94,7 +94,6 @@ code/
 │   ├── utils_qa.py               # QA 유틸리티
 │   └── qdrant_indexing/
 │       └── build_qdrant_hybrid_index.py # Qdrant 인덱싱 스크립트
-├── requirements.txt       # 의존성 패키지 목록
 └── README.md              # 가이드 문서 (본 파일)
 ```
 
