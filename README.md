@@ -22,9 +22,12 @@ uv sync
 ### 1. Train (MRC 모델 학습) 및 Eval
 
 `train.py`는 extractive MRC(Reader) 모델을 학습합니다. 
-`--add_korquad` 플래그를 사용하여 KorQuad 1.0 데이터를 학습 데이터에 추가할 수 있습니다.
+- 하단은 `klue/roberta-large`로 진행했던 1차 학습 스크립트 사용 예시이며, 2차 학습 스크립트는 README 하단에 기재해 두었습니다.
 
-- 하단은 제가 진행했던 1차 학습 스크립트 예시이며, 2차 학습 스크립트는 README 하단에 기재해 두었습니다.
+*   `--add_korquad True` 플래그를 사용하여 KorQuad 1.0 데이터를 학습 데이터에 추가할 수 있습니다.
+
+
+**example**
 
 ```bash
 uv run code/src/train.py \
