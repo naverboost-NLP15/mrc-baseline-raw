@@ -459,13 +459,16 @@ class QdrantHybridRetrieval:
             # Result Construction
             contexts_list = []
             for i_idx, idx in enumerate(final_indices):
-                contexts_list.append(
-                    {
-                        "text": self.texts[idx],
-                        "doc_id": self.doc_ids[idx],
-                        "score": final_scores[i_idx],
-                    }
-                )
+                contexts_list.append({
+                    "text": self.texts[idx],
+                    "doc_id": self.doc_ids[idx],
+                    "score": final_scores[i_idx]
+                })
+            
+            # [수정] 기존 Inference 코드 호환성을 위해 'context' 필드 추가 (Join)
+            # 주의: Reader가 Gold Context로만 학습된 경우, Top-1만 사용하는 것이 성능이 더 좋을 수 있음.
+            # 추후 성능 향상을 위해서는 'contexts' 리스트를 활용해 개별 문서별 Inference 후 Score Ensemble(Reader+Retriever) 권장.
+            joined_context = "\n\n".join([c["text"] for c in contexts_list])
 
             tmp = {
                 "question": query,
@@ -474,7 +477,8 @@ class QdrantHybridRetrieval:
                     if isinstance(query_or_dataset, Dataset)
                     else i
                 ),
-                "contexts": contexts_list,
+                "context": joined_context, # 호환성 유지
+                "contexts": contexts_list, # Advanced Inference용
             }
 
             if isinstance(query_or_dataset, Dataset):
@@ -533,19 +537,10 @@ if __name__ == "__main__":
     parser.set_defaults(use_reranker=True)
 
     # WandB arguments
-    parser.add_argument(
-        "--wandb_project", type=str, default="QDQA_Retrieval", help="WandB project name"
-    )
-    parser.add_argument(
-        "--wandb_entity", type=str, default=None, help="WandB entity name"
-    )
+    parser.add_argument("--wandb_project", type=str, default="QDQA_Retrieval", help="WandB project name")
+    parser.add_argument("--wandb_entity", type=str, default=None, help="WandB entity name")
     parser.add_argument("--wandb_name", type=str, default=None, help="WandB run name")
-    parser.add_argument(
-        "--output_path",
-        type=str,
-        default=None,
-        help="Path to save retrieval results (json)",
-    )
+    parser.add_argument("--output_path", type=str, default=None, help="Path to save retrieval results (json)")
 
     args = parser.parse_args()
 
@@ -609,10 +604,8 @@ if __name__ == "__main__":
         acc = correct_count / len(df)
         print(f"Top-{args.topk} Accuracy: {acc:.4f}")
 
-        wandb.log(
-            {
-                f"top{args.topk}_accuracy": acc,
-                "correct_count": correct_count,
-                "total_count": len(df),
-            }
-        )
+        wandb.log({
+            f"top{args.topk}_accuracy": acc,
+            "correct_count": correct_count,
+            "total_count": len(df),
+        })

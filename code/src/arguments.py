@@ -100,7 +100,15 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "Whether to add KorQuad v1 dataset for training."},
     )
+    korquad_only: bool = field(
+        default=False,
+        metadata={"help": "Whether to use ONLY KorQuad v1 dataset for training (ignores competition train data)."},
+    )
     alpha: float = field(
         default=0.5,
         metadata={"help": "Weight for Dense retrieval. Sparse will get 1 - alpha."},
+    )
+    include_validation: bool = field(
+        default=False,
+        metadata={"help": "Whether to include validation data in training (for final submission)."},
     )

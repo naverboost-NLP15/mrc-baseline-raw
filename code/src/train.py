@@ -79,6 +79,22 @@ def main():
     datasets = load_from_disk(data_args.dataset_name)
     print(datasets)
 
+    if data_args.include_validation:
+        print("Including validation data in training set for final tuning...")
+        if "train" in datasets and "validation" in datasets:
+            # Check for column mismatch (e.g. document_id) - Reuse logic from KorQuad merge
+            # Usually train/valid in same dataset have same columns, but valid might have extra or fewer.
+            # But here they come from same disk load, so they match.
+            
+            # Align columns just in case (e.g. if one has index col)
+            common_cols = [col for col in datasets["train"].column_names if col in datasets["validation"].column_names]
+            train_part = datasets["train"].select_columns(common_cols)
+            valid_part = datasets["validation"].select_columns(common_cols)
+            
+            combined_train = concatenate_datasets([train_part, valid_part])
+            datasets["train"] = combined_train
+            print(f"Merged Train+Valid. New train size: {len(datasets['train'])}")
+
     if data_args.add_korquad:
         print("Adding KorQuad v1 dataset...")
         korquad = load_dataset("squad_kor_v1")
@@ -86,8 +102,13 @@ def main():
         # KorQuad train dataset
         kq_train = korquad["train"]
 
+        if data_args.korquad_only:
+            print("!! USING KORQUAD DATASET ONLY !! (Ignoring original dataset)")
+            datasets["train"] = kq_train
+            print(f"KorQuad train size: {len(datasets['train'])}")
+        
         # Align features
-        if "train" in datasets:
+        elif "train" in datasets:
             org_train = datasets["train"]
 
             # Check for 'answers' feature compatibility (Sequence vs plain)

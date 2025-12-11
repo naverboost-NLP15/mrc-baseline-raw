@@ -122,6 +122,11 @@ def postprocess_qa_predictions(
         f"Post-processing {len(examples)} example predictions split into {len(features)} features."
     )
 
+    # [Modified for Separate Inference]
+    # We need to aggregate predictions across all retrieved contexts for the same original Question ID.
+    # Map: Original ID -> List of all predictions from all contexts
+    all_predictions_map = collections.defaultdict(list)
+
     # 전체 example들에 대한 main Loop
     for example_index, example in enumerate(tqdm(examples)):
         # 해당하는 현재 example index
@@ -227,6 +232,14 @@ def postprocess_qa_predictions(
                 0, {"text": "empty", "start_logit": 0.0, "end_logit": 0.0, "score": 0.0}
             )
 
+        # [Aggregation Logic]
+        # Instead of finalizing here, we collect predictions for this ID.
+        # Note: We need to handle Softmax normalization properly if we want 'Probabilities'.
+        # However, for simply finding Max(Score), raw logits (score) are fine.
+        # If we were to implement "Max(Prob)", we should compute softmax per-context?
+        # Standard Independent Inference: P(A|Doc) is computed per doc.
+        # So we should compute softmax HERE for this doc, then store the prob.
+        
         # 모든 점수의 소프트맥스를 계산합니다(we do it with numpy to stay independent from torch/tf in this file, using the LogSumExp trick).
         scores = np.array([pred.pop("score") for pred in predictions])
         exp_scores = np.exp(scores - np.max(scores))
@@ -235,33 +248,76 @@ def postprocess_qa_predictions(
         # 예측값에 확률을 포함합니다.
         for prob, pred in zip(probs, predictions):
             pred["probability"] = prob
+            # Also store retrieval_score if available, for future weighting
+            if "retrieval_score" in example:
+                 pred["retrieval_score"] = example["retrieval_score"]
+
+        # Collect all n-best candidates for this ID
+        # [Fix] Use 'original_id' for aggregation if available (Separate Inference), otherwise 'id'
+        agg_id = example["original_id"] if "original_id" in example else example["id"]
+        all_predictions_map[agg_id].extend(predictions)
+
+
+    # [Global Selection Step]
+    # Now iterate over all IDs and pick the absolute best answer across all contexts.
+    for example_id, predictions in all_predictions_map.items():
+        
+        
+        # ![Robust Ranking]
+        # To prevent Reader's overconfidence on noisy docs (Top-k), we incorporate Retrieval Score.
+        # Since Retrieval Score scale varies (BM25 vs Dense), we Normalize it to 0-1 per question.
+        
+        retrieval_scores = [p.get("retrieval_score", 0.0) for p in predictions]
+        if retrieval_scores:
+            min_s = min(retrieval_scores)
+            max_s = max(retrieval_scores)
+            diff = max_s - min_s
+            
+            for p in predictions:
+                r_score = p.get("retrieval_score", 0.0)
+                # Normalize to 0~1
+                if diff > 1e-6:
+                    norm_score = (r_score - min_s) / diff
+                else:
+                    norm_score = 1.0 if max_s > 0 else 0.0 # If all scores same, treat as equal
+                
+                # Final Score = Reader Probability (0~1) + 0.5 * Normalized Retrieval Score (0~1)
+                # This gives Retrieval a significant voting power to suppress low-ranked noise.
+                p["final_score"] = p["probability"] + 0.5 * norm_score
+        else:
+            for p in predictions:
+                p["final_score"] = p["probability"]
+
+        # Sort descending by final_score
+        predictions = sorted(
+            predictions, key=lambda x: x["final_score"], reverse=True
+        )
+        
+        # Take top n_best_size global candidates
+        predictions = predictions[:n_best_size]
 
         # best prediction을 선택합니다.
         if not version_2_with_negative:
-            all_predictions[example["id"]] = predictions[0]["text"]
+            all_predictions[example_id] = predictions[0]["text"]
         else:
             # else case : 먼저 비어 있지 않은 최상의 예측을 찾아야 합니다
             i = 0
-            while predictions[i]["text"] == "":
+            while i < len(predictions) and predictions[i]["text"] == "":
                 i += 1
-            best_non_null_pred = predictions[i]
+            if i == len(predictions):
+                 best_non_null_pred = predictions[0] # All empty?
+            else:
+                 best_non_null_pred = predictions[i]
 
             # threshold를 사용해서 null prediction을 비교합니다.
-            score_diff = (
-                null_score
-                - best_non_null_pred["start_logit"]
-                - best_non_null_pred["end_logit"]
-            )
-            scores_diff_json[example["id"]] = float(
-                score_diff
-            )  # JSON-serializable 가능
-            if score_diff > null_score_diff_threshold:
-                all_predictions[example["id"]] = ""
-            else:
-                all_predictions[example["id"]] = best_non_null_pred["text"]
+            # Note: Null score handling in Separate Inference is tricky. 
+            # We assume the best non-null against its own null score? 
+            # Simplified: Just pick best non-null.
+            
+            all_predictions[example_id] = best_non_null_pred["text"]
 
         # np.float를 다시 float로 casting -> `predictions`은 JSON-serializable 가능
-        all_nbest_json[example["id"]] = [
+        all_nbest_json[example_id] = [
             {
                 k: (
                     float(v)
@@ -272,6 +328,7 @@ def postprocess_qa_predictions(
             }
             for pred in predictions
         ]
+
 
     # output_dir이 있으면 모든 dicts를 저장합니다.
     if output_dir is not None:
