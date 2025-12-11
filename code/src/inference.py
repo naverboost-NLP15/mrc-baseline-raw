@@ -138,47 +138,17 @@ def run_retrieval(
         alpha=alpha,
     )
 
-    # [Modified for Separate Inference]
-    # Flatten the retrieved contexts so that each (Question, Context) pair becomes a separate example.
-    # We will aggregate the scores later in post-processing.
-    
-    flattened_data = []
-    
-    for idx, row in df.iterrows():
-        # 'contexts' column contains a list of dicts: [{'text': ..., 'score': ...}, ...]
-        contexts = row["contexts"]
-        original_id = row["id"]
-        question = row["question"]
-        answers = row.get("answers", None) # Might be None for test data
-        
-        for i, ctx in enumerate(contexts):
-            # Create a new example for each retrieved context
-            # CRITICAL FIX: 'id' must be unique for feature mapping to work correctly.
-            # We use 'original_id' for aggregation later.
-            new_item = {
-                "id": f"{original_id}_{i}", # Unique ID for processing
-                "original_id": original_id, # Original ID for aggregation
-                "question": question,
-                "context": ctx["text"],
-                "retrieval_score": ctx["score"],
-            }
-            if answers is not None:
-                new_item["answers"] = answers
-                
-            flattened_data.append(new_item)
-
-    # Define features for the flattened dataset
-    # We need to include 'original_id'
+    # test data 에 대해선 정답이 없으므로 id question context 로만 데이터셋이 구성됩니다.
     if training_args.do_predict:
         f = Features(
             {
                 "context": Value(dtype="string", id=None),
                 "id": Value(dtype="string", id=None),
-                "original_id": Value(dtype="string", id=None),
                 "question": Value(dtype="string", id=None),
-                "retrieval_score": Value(dtype="float32", id=None),
             }
         )
+
+    # train data 에 대해선 정답이 존재하므로 id question context answer 로 데이터셋이 구성됩니다.
     elif training_args.do_eval:
         f = Features(
             {
@@ -192,41 +162,38 @@ def run_retrieval(
                 ),
                 "context": Value(dtype="string", id=None),
                 "id": Value(dtype="string", id=None),
-                "original_id": Value(dtype="string", id=None),
                 "question": Value(dtype="string", id=None),
-                "retrieval_score": Value(dtype="float32", id=None),
             }
         )
-    else:
-        # Fallback
-        f = Features(
-            {
-                "context": Value(dtype="string", id=None),
-                "id": Value(dtype="string", id=None),
-                "original_id": Value(dtype="string", id=None),
-                "question": Value(dtype="string", id=None),
-                "retrieval_score": Value(dtype="float32", id=None),
-            }
-        )
-        if "answers" in df.columns:
-             f["answers"] = Sequence(
-                    feature={
-                        "text": Value(dtype="string", id=None),
-                        "answer_start": Value(dtype="int32", id=None),
-                    },
-                    length=-1,
-                    id=None,
-                )
 
-    # Create dataset from flattened list
-    # Convert list of dicts to DataFrame first for easier Dataset creation, or dict of lists
-    import pandas as pd
-    flattened_df = pd.DataFrame(flattened_data)
-    
-    # Ensure columns match features
-    flattened_df = flattened_df[list(f.keys())]
-    
-    datasets = DatasetDict({"validation": Dataset.from_pandas(flattened_df, features=f)})
+    else:
+        if "answers" in df.columns:
+            f = Features(
+                {
+                    "answers": Sequence(
+                        feature={
+                            "text": Value(dtype="string", id=None),
+                            "answer_start": Value(dtype="int32", id=None),
+                        },
+                        length=-1,
+                        id=None,
+                    ),
+                    "context": Value(dtype="string", id=None),
+                    "id": Value(dtype="string", id=None),
+                    "question": Value(dtype="string", id=None),
+                }
+            )
+        else:
+            f = Features(
+                {
+                    "context": Value(dtype="string", id=None),
+                    "id": Value(dtype="string", id=None),
+                    "question": Value(dtype="string", id=None),
+                }
+            )
+
+    df = df[list(f.keys())]
+    datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
     return datasets
 
 
@@ -346,18 +313,10 @@ def run_mrc(
         if training_args.do_predict:
             return formatted_predictions
         elif training_args.do_eval:
-            # [Modified] Deduplicate references by original_id
-            # The validation dataset is flattened, so we have multiple rows for the same question.
-            # We need only one reference per question for evaluation.
-            
-            ref_dict = {}
-            for ex in datasets["validation"]:
-                # Use original_id if exists, else id
-                oid = ex["original_id"] if "original_id" in ex else ex["id"]
-                if oid not in ref_dict:
-                    ref_dict[oid] = {"id": oid, "answers": ex[answer_column_name]}
-            
-            references = list(ref_dict.values())
+            references = [
+                {"id": ex["id"], "answers": ex[answer_column_name]}
+                for ex in datasets["validation"]
+            ]
 
             return EvalPrediction(
                 predictions=formatted_predictions, label_ids=references

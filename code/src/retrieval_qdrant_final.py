@@ -457,18 +457,11 @@ class QdrantHybridRetrieval:
                 final_scores = [float(x[1]) for x in rerank_candidates[:topk]]
 
             # Result Construction
-            contexts_list = []
-            for i_idx, idx in enumerate(final_indices):
-                contexts_list.append({
-                    "text": self.texts[idx],
-                    "doc_id": self.doc_ids[idx],
-                    "score": final_scores[i_idx]
-                })
+            retrieved_texts = [self.texts[idx] for idx in final_indices]
+            retrieved_doc_ids = [self.doc_ids[idx] for idx in final_indices]
             
-            # [수정] 기존 Inference 코드 호환성을 위해 'context' 필드 추가 (Join)
-            # 주의: Reader가 Gold Context로만 학습된 경우, Top-1만 사용하는 것이 성능이 더 좋을 수 있음.
-            # 추후 성능 향상을 위해서는 'contexts' 리스트를 활용해 개별 문서별 Inference 후 Score Ensemble(Reader+Retriever) 권장.
-            joined_context = "\n\n".join([c["text"] for c in contexts_list])
+            # Join texts for standard Reader input
+            joined_context = "\n\n".join(retrieved_texts)
 
             tmp = {
                 "question": query,
@@ -477,8 +470,8 @@ class QdrantHybridRetrieval:
                     if isinstance(query_or_dataset, Dataset)
                     else i
                 ),
-                "context": joined_context, # 호환성 유지
-                "contexts": contexts_list, # Advanced Inference용
+                "context": joined_context,
+                "retrieved_doc_ids": retrieved_doc_ids, # Optional: keep for debugging/reference
             }
 
             if isinstance(query_or_dataset, Dataset):
@@ -597,9 +590,8 @@ if __name__ == "__main__":
         correct_count = 0
         for idx, row in df.iterrows():
             answer_texts = row["answers"]["text"]
-            # Reconstruct context from the list for evaluation
-            full_context = " ".join([c["text"] for c in row["contexts"]])
-            if any(ans in full_context for ans in answer_texts):
+            # Check if answer is in the joined context
+            if any(ans in row["context"] for ans in answer_texts):
                 correct_count += 1
         acc = correct_count / len(df)
         print(f"Top-{args.topk} Accuracy: {acc:.4f}")
