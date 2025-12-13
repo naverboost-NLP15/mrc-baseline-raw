@@ -22,7 +22,7 @@ import logging
 import os
 import csv
 import random
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, List
 
 import numpy as np
 import torch
@@ -366,3 +366,119 @@ def check_no_error(
     if "validation" not in datasets:
         raise ValueError("--do_eval requires a validation dataset")
     return last_checkpoint, max_seq_length
+
+
+class MRCPreprocessor:
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizerFast,
+        data_args: DataTrainingArguments,
+        column_names: Optional[List[str]] = None,
+        max_seq_length: Optional[int] = None,
+    ):
+        self.tokenizer = tokenizer
+        self.data_args = data_args
+        self.max_seq_length = max_seq_length if max_seq_length is not None else data_args.max_seq_length
+        self.pad_on_right = tokenizer.padding_side == "right"
+        
+        if column_names is None:
+            column_names = ["question", "context", "answers"]
+            
+        self.question_column_name = "question" if "question" in column_names else column_names[0]
+        self.context_column_name = "context" if "context" in column_names else column_names[1]
+        self.answer_column_name = "answers" if "answers" in column_names else column_names[2]
+
+    def _tokenize_fn(self, examples):
+        """
+        Train/Validation 공통 토크나이징 로직
+        """
+        tokenized_examples = self.tokenizer(
+            examples[self.question_column_name if self.pad_on_right else self.context_column_name],
+            examples[self.context_column_name if self.pad_on_right else self.question_column_name],
+            truncation="only_second" if self.pad_on_right else "only_first",
+            max_length=self.max_seq_length,
+            stride=self.data_args.doc_stride,
+            return_overflowing_tokens=True,
+            return_offsets_mapping=True,
+            return_token_type_ids=False,
+            padding="max_length" if self.data_args.pad_to_max_length else False,
+        )
+        return tokenized_examples
+
+    def prepare_train_features(self, examples):
+        """
+        학습 데이터 전처리를 수행합니다.
+        1. 텍스트 토크나이징 (padding, truncation, stride 적용)
+        2. 정답(Answer)의 Character 좌표를 Token 좌표로 변환 (Start/End position)
+        3. 정답이 잘린 경우 CLS 토큰으로 매핑
+        """
+        tokenized_examples = self._tokenize_fn(examples)
+
+        sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
+        offset_mapping = tokenized_examples.pop("offset_mapping")
+
+        tokenized_examples["start_positions"] = []
+        tokenized_examples["end_positions"] = []
+
+        for i, offsets in enumerate(offset_mapping):
+            input_ids = tokenized_examples["input_ids"][i]
+            cls_index = input_ids.index(self.tokenizer.cls_token_id)
+            sequence_ids = tokenized_examples.sequence_ids(i)
+            sample_index = sample_mapping[i]
+            answers = examples[self.answer_column_name][sample_index]
+
+            if len(answers["answer_start"]) == 0:
+                tokenized_examples["start_positions"].append(cls_index)
+                tokenized_examples["end_positions"].append(cls_index)
+            else:
+                start_char = answers["answer_start"][0]
+                end_char = start_char + len(answers["text"][0])
+
+                token_start_index = 0
+                while sequence_ids[token_start_index] != (1 if self.pad_on_right else 0):
+                    token_start_index += 1
+
+                token_end_index = len(input_ids) - 1
+                while sequence_ids[token_end_index] != (1 if self.pad_on_right else 0):
+                    token_end_index -= 1
+
+                if not (
+                    offsets[token_start_index][0] <= start_char
+                    and offsets[token_end_index][1] >= end_char
+                ):
+                    tokenized_examples["start_positions"].append(cls_index)
+                    tokenized_examples["end_positions"].append(cls_index)
+                else:
+                    while (
+                        token_start_index < len(offsets)
+                        and offsets[token_start_index][0] <= start_char
+                    ):
+                        token_start_index += 1
+                    tokenized_examples["start_positions"].append(token_start_index - 1)
+                    while offsets[token_end_index][1] >= end_char:
+                        token_end_index -= 1
+                    tokenized_examples["end_positions"].append(token_end_index + 1)
+
+        return tokenized_examples
+
+    def prepare_validation_features(self, examples):
+        """
+        검증 데이터 전처리를 수행합니다.
+        Overflowing token을 매핑하고, 정답 추론을 위한 example_id를 보존합니다.
+        """
+        tokenized_examples = self._tokenize_fn(examples)
+
+        sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
+        tokenized_examples["example_id"] = []
+
+        for i in range(len(tokenized_examples["input_ids"])):
+            sequence_ids = tokenized_examples.sequence_ids(i)
+            context_index = 1 if self.pad_on_right else 0
+            sample_index = sample_mapping[i]
+            tokenized_examples["example_id"].append(examples["id"][sample_index])
+
+            tokenized_examples["offset_mapping"][i] = [
+                (o if sequence_ids[k] == context_index else None)
+                for k, o in enumerate(tokenized_examples["offset_mapping"][i])
+            ]
+        return tokenized_examples

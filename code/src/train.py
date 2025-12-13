@@ -19,7 +19,7 @@ from transformers import (
     HfArgumentParser,
     TrainingArguments,
 )
-from utils_qa import check_no_error, postprocess_qa_predictions, set_seed
+from utils_qa import check_no_error, postprocess_qa_predictions, set_seed, MRCPreprocessor
 
 """
 [코드 구조 및 설정 설명]
@@ -167,82 +167,17 @@ def run_mrc(
     else:
         column_names = datasets["validation"].column_names
 
-    question_column_name = "question" if "question" in column_names else column_names[0]
-    context_column_name = "context" if "context" in column_names else column_names[1]
-    answer_column_name = "answers" if "answers" in column_names else column_names[2]
-
-    pad_on_right = tokenizer.padding_side == "right"
-
     last_checkpoint, max_seq_length = check_no_error(
         data_args, training_args, datasets, tokenizer
     )
 
-    # Train 전처리 함수
-    def prepare_train_features(examples):
-        """
-        학습 데이터 전처리를 수행합니다.
-        1. 텍스트 토크나이징 (padding, truncation, stride 적용)
-        2. 정답(Answer)의 Character 좌표를 Token 좌표로 변환 (Start/End position)
-        3. 정답이 잘린 경우 CLS 토큰으로 매핑
-        """
-        tokenized_examples = tokenizer(
-            examples[question_column_name if pad_on_right else context_column_name],
-            examples[context_column_name if pad_on_right else question_column_name],
-            truncation="only_second" if pad_on_right else "only_first",
-            max_length=max_seq_length,
-            stride=data_args.doc_stride,
-            return_overflowing_tokens=True,
-            return_offsets_mapping=True,
-            return_token_type_ids=False,
-            padding="max_length" if data_args.pad_to_max_length else False,
-        )
-
-        sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
-        offset_mapping = tokenized_examples.pop("offset_mapping")
-
-        tokenized_examples["start_positions"] = []
-        tokenized_examples["end_positions"] = []
-
-        for i, offsets in enumerate(offset_mapping):
-            input_ids = tokenized_examples["input_ids"][i]
-            cls_index = input_ids.index(tokenizer.cls_token_id)
-            sequence_ids = tokenized_examples.sequence_ids(i)
-            sample_index = sample_mapping[i]
-            answers = examples[answer_column_name][sample_index]
-
-            if len(answers["answer_start"]) == 0:
-                tokenized_examples["start_positions"].append(cls_index)
-                tokenized_examples["end_positions"].append(cls_index)
-            else:
-                start_char = answers["answer_start"][0]
-                end_char = start_char + len(answers["text"][0])
-
-                token_start_index = 0
-                while sequence_ids[token_start_index] != (1 if pad_on_right else 0):
-                    token_start_index += 1
-
-                token_end_index = len(input_ids) - 1
-                while sequence_ids[token_end_index] != (1 if pad_on_right else 0):
-                    token_end_index -= 1
-
-                if not (
-                    offsets[token_start_index][0] <= start_char
-                    and offsets[token_end_index][1] >= end_char
-                ):
-                    tokenized_examples["start_positions"].append(cls_index)
-                    tokenized_examples["end_positions"].append(cls_index)
-                else:
-                    while (
-                        token_start_index < len(offsets)
-                        and offsets[token_start_index][0] <= start_char
-                    ):
-                        token_start_index += 1
-                    tokenized_examples["start_positions"].append(token_start_index - 1)
-                    while offsets[token_end_index][1] >= end_char:
-                        token_end_index -= 1
-                    tokenized_examples["end_positions"].append(token_end_index + 1)
-
-        return tokenized_examples
+    # Preprocessor 인스턴스 생성
+    processor = MRCPreprocessor(
+        tokenizer=tokenizer,
+        data_args=data_args,
+        column_names=column_names,
+        max_seq_length=max_seq_length,
+    )
 
     if training_args.do_train:
         if "train" not in datasets:
@@ -251,51 +186,18 @@ def run_mrc(
         
         logger.info("학습 데이터 전처리...")
         train_dataset = train_dataset.map(
-            prepare_train_features,
+            processor.prepare_train_features,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
             remove_columns=column_names,
             load_from_cache_file=not data_args.overwrite_cache,
         )
 
-    # Validation 전처리 함수
-    def prepare_validation_features(examples):
-        """
-        검증 데이터 전처리를 수행합니다.
-        Overflowing token을 매핑하고, 정답 추론을 위한 example_id를 보존합니다.
-        """
-        tokenized_examples = tokenizer(
-            examples[question_column_name if pad_on_right else context_column_name],
-            examples[context_column_name if pad_on_right else question_column_name],
-            truncation="only_second" if pad_on_right else "only_first",
-            max_length=max_seq_length,
-            stride=data_args.doc_stride,
-            return_overflowing_tokens=True,
-            return_offsets_mapping=True,
-            return_token_type_ids=False,
-            padding="max_length" if data_args.pad_to_max_length else False,
-        )
-
-        sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
-        tokenized_examples["example_id"] = []
-
-        for i in range(len(tokenized_examples["input_ids"])):
-            sequence_ids = tokenized_examples.sequence_ids(i)
-            context_index = 1 if pad_on_right else 0
-            sample_index = sample_mapping[i]
-            tokenized_examples["example_id"].append(examples["id"][sample_index])
-
-            tokenized_examples["offset_mapping"][i] = [
-                (o if sequence_ids[k] == context_index else None)
-                for k, o in enumerate(tokenized_examples["offset_mapping"][i])
-            ]
-        return tokenized_examples
-
     if training_args.do_eval:
         eval_dataset = datasets["validation"]
         logger.info("검증 데이터 전처리...")
         eval_dataset = eval_dataset.map(
-            prepare_validation_features,
+            processor.prepare_validation_features,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
             remove_columns=eval_dataset.column_names,
@@ -321,7 +223,7 @@ def run_mrc(
             return formatted_predictions
         elif training_args.do_eval:
             references = [
-                {"id": ex["id"], "answers": ex[answer_column_name]}
+                {"id": ex["id"], "answers": ex[processor.answer_column_name]}
                 for ex in datasets["validation"]
             ]
             return EvalPrediction(
