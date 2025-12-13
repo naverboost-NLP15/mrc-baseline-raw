@@ -96,19 +96,11 @@ class DataTrainingArguments:
     dense_weight: float = field(
         default=1.0, metadata={"help": "Weight for Dense retrieval."}
     )
-    add_korquad: bool = field(
-        default=False,
-        metadata={"help": "Whether to add KorQuad v1 dataset for training."},
-    )
-    korquad_only: bool = field(
-        default=False,
-        metadata={"help": "Whether to use ONLY KorQuad v1 dataset for training (ignores competition train data)."},
+    train_datasets: list[str] = field(
+        default_factory=lambda: ["train"],
+        metadata={"help": "List of datasets to use for training. Usage: --train_datasets train korquad validation. Options: 'train', 'validation', 'korquad'."},
     )
     alpha: float = field(
         default=0.5,
         metadata={"help": "Weight for Dense retrieval. Sparse will get 1 - alpha."},
-    )
-    include_validation: bool = field(
-        default=False,
-        metadata={"help": "Whether to include validation data in training (for final submission)."},
     )

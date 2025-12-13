@@ -8,8 +8,9 @@ import evaluate
 from typing import NoReturn
 
 from arguments import DataTrainingArguments, ModelArguments
-from datasets import DatasetDict, load_from_disk, load_dataset, concatenate_datasets
+from datasets import DatasetDict
 from trainer_qa import QuestionAnsweringTrainer
+from extractor_data_loader import DataAssembler
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -71,44 +72,10 @@ def main():
         set_seed(training_args.seed)
 
     
-    logger.info(f"데이터셋 로드 {data_args.dataset_name}...")
-    datasets = load_from_disk(data_args.dataset_name)
-
-    # Validation 데이터 포함 여부
-    if data_args.include_validation:
-        logger.info("Validation 데이터 포함하여 학습...")
-        if "train" in datasets and "validation" in datasets:
-            common_cols = [col for col in datasets["train"].column_names if col in datasets["validation"].column_names]
-            train_part = datasets["train"].select_columns(common_cols)
-            valid_part = datasets["validation"].select_columns(common_cols)
-            
-            combined_train = concatenate_datasets([train_part, valid_part])
-            datasets["train"] = combined_train
-            logger.info(f"Train+Valid 병합 완료. 새로운 학습 데이터 크기: {len(datasets['train'])}")
-
-    # KorQuad 데이터 추가 여부
-    if data_args.add_korquad:
-        logger.info("KorQuad v1 데이터셋 추가...")
-        korquad = load_dataset("squad_kor_v1")
-        kq_train = korquad["train"]
-
-        if data_args.korquad_only:
-            logger.info("!! KorQuad 데이터셋만 사용 !! (기존 데이터셋 무시)")
-            datasets["train"] = kq_train
-        
-        elif "train" in datasets:
-            org_train = datasets["train"]
-            common_columns = [
-                col for col in org_train.column_names if col in kq_train.column_names
-            ]
-            kq_train = kq_train.select_columns(common_columns)
-            org_train_filtered = org_train.select_columns(common_columns)
-            kq_train = kq_train.cast(org_train_filtered.features)
-
-            combined_train = concatenate_datasets([org_train_filtered, kq_train])
-            datasets["train"] = combined_train
-            logger.info(f"KorQuad 추가 완료. 새로운 학습 데이터 크기: {len(datasets['train'])}")
-
+    logger.info(f"데이터셋 로드 및 병합 (Source: {data_args.train_datasets})...")
+    data_assembler = DataAssembler(data_args)
+    datasets = data_assembler.get_datasets()
+    
     
     logger.info("Config, Tokenizer, Model 로드...")
     config = AutoConfig.from_pretrained(
@@ -143,9 +110,7 @@ def main():
     print(f" | Learning Rate  : {training_args.learning_rate}")
     print(f" | Epochs         : {training_args.num_train_epochs}")
     print(f" | Seed           : {training_args.seed}")
-    print(f" | Include Valid  : {data_args.include_validation}")
-    print(f" | Add KorQuad    : {data_args.add_korquad}")
-    print(f" | KorQuad Only   : {data_args.korquad_only}")
+    print(f" | Train Sources  : {data_args.train_datasets}")
     print("=" * 50 + "\n")
 
     if training_args.do_train or training_args.do_eval:
