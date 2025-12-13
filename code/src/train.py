@@ -18,21 +18,8 @@ from transformers import (
     EvalPrediction,
     HfArgumentParser,
     TrainingArguments,
-    set_seed,
 )
-from utils_qa import check_no_error, postprocess_qa_predictions
-
-
-seed = 2024
-deterministic = False
-
-random.seed(seed)  # python random seed 고정
-np.random.seed(seed)  # numpy random seed 고정
-torch.manual_seed(seed)  # torch random seed 고정
-torch.cuda.manual_seed_all(seed)
-if deterministic:  # cudnn random seed 고정 - 고정 시 학습 속도가 느려질 수 있습니다.
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+from utils_qa import check_no_error, postprocess_qa_predictions, set_seed
 
 
 logger = logging.getLogger(__name__)
@@ -74,7 +61,8 @@ def main():
     logger.info("Training/evaluation parameters %s", training_args)
 
     # 모델을 초기화하기 전에 난수를 고정합니다.
-    set_seed(training_args.seed)
+    if any(arg.startswith("--seed") for arg in sys.argv):
+        set_seed(training_args.seed)
 
     datasets = load_from_disk(data_args.dataset_name)
     print(datasets)
