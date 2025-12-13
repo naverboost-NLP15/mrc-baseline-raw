@@ -1,11 +1,25 @@
 """
-Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
+Open-Domain Question Answering을 수행하는 Inference 코드입니다.
 
-대부분의 로직은 train.py 와 비슷하나 retrieval, predict 부분이 추가되어 있습니다.
+[코드 구조 및 설정 설명]
+
+1. Arguments 및 설정:
+   - 대부분의 설정은 train.py와 유사하며, retrieval 및 predict 관련 로직이 추가되었습니다.
+   - ./arguments.py 또는 transformers/training_args.py에서 가능한 인자를 확인할 수 있습니다.
+
+2. Retrieval (검색):
+   - QdrantHybridRetrieval을 사용하여 쿼리에 맞는 문서를 검색합니다.
+   - Dense(Embedding) 검색과 Sparse(BM25) 검색을 결합하여 사용합니다 (alpha 값으로 가중치 조절).
+
+3. Inference (추론):
+   - 검색된 문서를 Context로 하여 MRC 모델이 정답을 찾습니다.
+   - do_predict: 정답이 없는 Test set에 대한 추론.
+   - do_eval: 정답이 있는 Validation set에 대한 평가.
 """
 
 import logging
 import sys
+import os
 from typing import Callable, Dict, List, NoReturn, Tuple
 
 import evaluate
@@ -37,57 +51,52 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    # 가능한 arguments 들은 ./arguments.py 나 transformer package 안의 src/transformers/training_args.py 에서 확인 가능합니다.
-    # --help flag 를 실행시켜서 확인할 수 도 있습니다.
-
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments, TrainingArguments)
     )
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    # wandb 설정
-    import os
-
-    training_args.report_to = ["wandb"]
-    if "WANDB_PROJECT" not in os.environ:
-        os.environ["WANDB_PROJECT"] = "QDQA"
-    if training_args.run_name is None:
-        training_args.run_name = training_args.output_dir.split("/")[-1]
-
-    print(f"model is from {model_args.model_name_or_path}")
-    print(f"data is from {data_args.dataset_name}")
-
-    # logging 설정
+    # Logging 설정
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+    
+    # 요약 정보 수집
+    summary = []
+    summary.append("=" * 30)
+    summary.append(f"Model: {model_args.model_name_or_path}")
+    summary.append(f"Dataset: {data_args.dataset_name}")
+    summary.append(f"Output Dir: {training_args.output_dir}")
 
-    # verbosity 설정 : Transformers logger의 정보로 사용합니다 (on main process only)
+    # WandB 설정
+    training_args.report_to = ["wandb"]
+    if "WANDB_PROJECT" not in os.environ:
+        os.environ["WANDB_PROJECT"] = "QDQA"
+    if training_args.run_name is None:
+        training_args.run_name = training_args.output_dir.split("/")[-1]
+    summary.append(f"Run Name: {training_args.run_name}")
+    summary.append("=" * 30)
+
+    # 요약 정보 출력
+    print("\n".join(summary))
+
     logger.info("Training/evaluation parameters %s", training_args)
 
-    # 모델을 초기화하기 전에 난수를 고정합니다.
+    # Seed 고정
     set_seed(training_args.seed)
 
+    # 데이터셋 로드
     datasets = load_from_disk(data_args.dataset_name)
-    print(datasets)
+    logger.info(f"Loaded datasets: {datasets}")
 
-    # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
-    # argument로 원하는 모델 이름을 설정하면 옵션을 바꿀 수 있습니다.
+    # Config, Tokenizer, Model 로드
     config = AutoConfig.from_pretrained(
-        (
-            model_args.config_name
-            if model_args.config_name
-            else model_args.model_name_or_path
-        ),
+        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        (
-            model_args.tokenizer_name
-            if model_args.tokenizer_name
-            else model_args.model_name_or_path
-        ),
+        model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         use_fast=True,
     )
     model = AutoModelForQuestionAnswering.from_pretrained(
@@ -96,8 +105,9 @@ def main():
         config=config,
     )
 
-    # True일 경우 : run passage retrieval
+    # Retrieval 실행
     if data_args.eval_retrieval:
+        logger.info("Running Retrieval...")
         datasets = run_retrieval(
             tokenizer.tokenize,
             datasets,
@@ -105,7 +115,7 @@ def main():
             data_args,
         )
 
-    # eval or predict mrc model
+    # MRC 실행 (Eval or Predict)
     if training_args.do_eval or training_args.do_predict:
         run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
 
@@ -119,17 +129,12 @@ def run_retrieval(
     context_path: str = "wikipedia_documents.json",
 ) -> DatasetDict:
 
-    # Query에 맞는 Passage들을 Retrieval 합니다.
-    # QdrantHybridRetrieval 초기화 (tokenize_fn 제거, use_fp16 추가)
     retriever = QdrantHybridRetrieval(
         data_path=data_path,
         context_path=context_path,
         use_fp16=training_args.fp16,
     )
 
-    # HybridRetrieval은 retrieve()에서 Hybrid 검색을 수행합니다.
-    # 인자 매핑: bm25_weight/dense_weight -> alpha (dense_weight를 alpha로 사용)
-    # data_args에 alpha가 없으면 dense_weight를, 그것도 없으면 0.5를 사용
     alpha = getattr(data_args, "alpha", getattr(data_args, "dense_weight", 0.5))
 
     df = retriever.retrieve(
@@ -138,7 +143,6 @@ def run_retrieval(
         alpha=alpha,
     )
 
-    # test data 에 대해선 정답이 없으므로 id question context 로만 데이터셋이 구성됩니다.
     if training_args.do_predict:
         f = Features(
             {
@@ -147,8 +151,6 @@ def run_retrieval(
                 "question": Value(dtype="string", id=None),
             }
         )
-
-    # train data 에 대해선 정답이 존재하므로 id question context answer 로 데이터셋이 구성됩니다.
     elif training_args.do_eval:
         f = Features(
             {
@@ -165,7 +167,6 @@ def run_retrieval(
                 "question": Value(dtype="string", id=None),
             }
         )
-
     else:
         if "answers" in df.columns:
             f = Features(
@@ -206,26 +207,19 @@ def run_mrc(
     model,
 ) -> NoReturn:
 
-    # eval 혹은 prediction에서만 사용함
     column_names = datasets["validation"].column_names
 
     question_column_name = "question" if "question" in column_names else column_names[0]
     context_column_name = "context" if "context" in column_names else column_names[1]
     answer_column_name = "answers" if "answers" in column_names else column_names[2]
 
-    # Padding에 대한 옵션을 설정합니다.
-    # (question|context) 혹은 (context|question)로 세팅 가능합니다.
     pad_on_right = tokenizer.padding_side == "right"
 
-    # 오류가 있는지 확인합니다.
     last_checkpoint, max_seq_length = check_no_error(
         data_args, training_args, datasets, tokenizer
     )
 
-    # Validation preprocessing / 전처리를 진행합니다.
     def prepare_validation_features(examples):
-        # truncation과 padding(length가 짧을때만)을 통해 toknization을 진행하며, stride를 이용하여 overflow를 유지합니다.
-        # 각 example들은 이전의 context와 조금씩 겹치게됩니다.
         tokenized_examples = tokenizer(
             examples[question_column_name if pad_on_right else context_column_name],
             examples[context_column_name if pad_on_right else question_column_name],
@@ -234,27 +228,19 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            return_token_type_ids=False,  # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False,
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
-        # 길이가 긴 context가 등장할 경우 truncate를 진행해야하므로, 해당 데이터셋을 찾을 수 있도록 mapping 가능한 값이 필요합니다.
         sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
-
-        # evaluation을 위해, prediction을 context의 substring으로 변환해야합니다.
-        # corresponding example_id를 유지하고 offset mappings을 저장해야합니다.
         tokenized_examples["example_id"] = []
 
         for i in range(len(tokenized_examples["input_ids"])):
-            # sequence id를 설정합니다 (to know what is the context and what is the question).
             sequence_ids = tokenized_examples.sequence_ids(i)
             context_index = 1 if pad_on_right else 0
-
-            # 하나의 example이 여러개의 span을 가질 수 있습니다.
             sample_index = sample_mapping[i]
             tokenized_examples["example_id"].append(examples["id"][sample_index])
 
-            # context의 일부가 아닌 offset_mapping을 None으로 설정하여 토큰 위치가 컨텍스트의 일부인지 여부를 쉽게 판별할 수 있습니다.
             tokenized_examples["offset_mapping"][i] = [
                 (o if sequence_ids[k] == context_index else None)
                 for k, o in enumerate(tokenized_examples["offset_mapping"][i])
@@ -262,8 +248,6 @@ def run_mrc(
         return tokenized_examples
 
     eval_dataset = datasets["validation"]
-
-    # Validation Feature 생성
     eval_dataset = eval_dataset.map(
         prepare_validation_features,
         batched=True,
@@ -272,16 +256,11 @@ def run_mrc(
         load_from_cache_file=not data_args.overwrite_cache,
     )
 
-    # Data collator
-    # flag가 True이면 이미 max length로 padding된 상태입니다.
-    # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
     data_collator = DataCollatorWithPadding(
         tokenizer, pad_to_multiple_of=8 if training_args.fp16 else None
     )
 
-    # Sub-directory creation logic based on mode
-    import os
-
+    # Sub-directory creation based on mode
     if training_args.do_eval:
         training_args.output_dir = os.path.join(training_args.output_dir, "eval_pred")
     elif training_args.do_predict:
@@ -290,14 +269,12 @@ def run_mrc(
     if not os.path.exists(training_args.output_dir):
         os.makedirs(training_args.output_dir)
 
-    # Post-processing:
     def post_processing_function(
         examples,
         features,
         predictions: Tuple[np.ndarray, np.ndarray],
         training_args: TrainingArguments,
     ) -> EvalPrediction:
-        # Post-processing: start logits과 end logits을 original context의 정답과 match시킵니다.
         predictions = postprocess_qa_predictions(
             examples=examples,
             features=features,
@@ -305,7 +282,6 @@ def run_mrc(
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
         )
-        # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [
             {"id": k, "prediction_text": v} for k, v in predictions.items()
         ]
@@ -317,7 +293,6 @@ def run_mrc(
                 {"id": ex["id"], "answers": ex[answer_column_name]}
                 for ex in datasets["validation"]
             ]
-
             return EvalPrediction(
                 predictions=formatted_predictions, label_ids=references
             )
@@ -327,8 +302,7 @@ def run_mrc(
     def compute_metrics(p: EvalPrediction) -> Dict:
         return metric.compute(predictions=p.predictions, references=p.label_ids)
 
-    print("init trainer...")
-    # Trainer 초기화
+    logger.info("Initializing Trainer...")
     trainer = QuestionAnsweringTrainer(
         model=model,
         args=training_args,
@@ -343,21 +317,15 @@ def run_mrc(
 
     logger.info("*** Evaluate ***")
 
-    #### eval dataset & eval example - predictions.json 생성됨
     if training_args.do_predict:
         predictions = trainer.predict(
             test_dataset=eval_dataset, test_examples=datasets["validation"]
         )
-
-        # predictions.json 은 postprocess_qa_predictions() 호출시 이미 저장됩니다.
-        print(
-            "No metric can be presented because there is no correct answer given. Job done!"
-        )
+        logger.info("Prediction completed. Results saved via post-processing.")
 
     if training_args.do_eval:
         metrics = trainer.evaluate()
         metrics["eval_samples"] = len(eval_dataset)
-
         trainer.log_metrics("test", metrics)
         trainer.save_metrics("test", metrics)
 
