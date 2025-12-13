@@ -21,134 +21,101 @@ from transformers import (
 )
 from utils_qa import check_no_error, postprocess_qa_predictions, set_seed
 
+"""
+[코드 구조 및 설정 설명]
+
+1. Arguments 설정:
+   - 실행 시 필요한 설정값들은 ./arguments.py 또는 transformers/training_args.py에서 확인할 수 있습니다.
+   - --help 플래그를 통해 커맨드라인에서 확인 가능합니다.
+   - HfArgumentParser를 통해 ModelArguments, DataTrainingArguments, TrainingArguments를 파싱합니다.
+
+2. Logging 및 WandB:
+   - WandB 프로젝트는 'QDQA'로 설정되며, run_name이 없으면 output_dir의 마지막 경로명을 사용합니다.
+   - Transformers logger의 verbosity를 설정하여 학습 진행 상황을 모니터링합니다.
+
+3. Tokenizer:
+   - 'use_fast=True' 설정을 통해 Rust로 구현된 빠른 속도의 tokenizer를 사용합니다.
+   - 모델에 따라 fast tokenizer를 지원하지 않는 경우도 있으니 확인이 필요합니다.
+
+4. 데이터 전처리 (Preprocessing):
+   - 질문(Question)과 지문(Context)을 합쳐서 모델 입력으로 사용합니다.
+   - Padding 옵션은 tokenizer 설정(padding_side)에 따라 (question|context) 또는 (context|question) 순서로 결정됩니다.
+   - 긴 문서(Context)의 경우 stride를 사용하여 여러 개의 feature로 나누어 처리합니다 (doc_stride).
+   - 정답(Answer) 위치를 찾기 위해 offset_mapping을 사용합니다.
+
+5. 평가 (Evaluation):
+   - 예측 결과(Start/End logits)를 후처리(post_processing_function)하여 텍스트 형태의 정답으로 변환합니다.
+   - SQuAD metric을 사용하여 성능을 평가합니다.
+"""
 
 logger = logging.getLogger(__name__)
 
 
 def main():
-    # 가능한 arguments 확인 방법:  ./arguments.py 나 transformer package 안의 src/transformers/training_args.py 에서 확인 가능합니다.
-    # --help flag 를 실행시켜서 확인
-
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments, TrainingArguments)
     )
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    # wandb 설정
-    training_args.report_to = ["wandb"]
-    if "WANDB_PROJECT" not in os.environ:
-        os.environ["WANDB_PROJECT"] = "QDQA"
-    if training_args.run_name is None:
-        training_args.run_name = training_args.output_dir.split("/")[-1]
-
-    print(model_args.model_name_or_path)
-
-    # [참고] argument를 manual하게 수정하고 싶은 경우에 아래와 같은 방식을 사용할 수 있습니다
-    # training_args.per_device_train_batch_size = 4
-    # print(training_args.per_device_train_batch_size)
-
-    print(f"model is from {model_args.model_name_or_path}")
-    print(f"data is from {data_args.dataset_name}")
-
-    # logging 설정
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s -    %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+    logger.setLevel(logging.INFO)
 
-    # verbosity 설정 : Transformers logger의 정보로 사용합니다 (on main process only)
-    logger.info("Training/evaluation parameters %s", training_args)
 
-    # 모델을 초기화하기 전에 난수를 고정합니다.
+    
     if any(arg.startswith("--seed") for arg in sys.argv):
+        logger.info(f"시드 설정 {training_args.seed}")
         set_seed(training_args.seed)
 
+    
+    logger.info(f"데이터셋 로드 {data_args.dataset_name}...")
     datasets = load_from_disk(data_args.dataset_name)
-    print(datasets)
 
+    # Validation 데이터 포함 여부
     if data_args.include_validation:
-        print("Including validation data in training set for final tuning...")
+        logger.info("Validation 데이터 포함하여 학습...")
         if "train" in datasets and "validation" in datasets:
-            # Check for column mismatch (e.g. document_id) - Reuse logic from KorQuad merge
-            # Usually train/valid in same dataset have same columns, but valid might have extra or fewer.
-            # But here they come from same disk load, so they match.
-            
-            # Align columns just in case (e.g. if one has index col)
             common_cols = [col for col in datasets["train"].column_names if col in datasets["validation"].column_names]
             train_part = datasets["train"].select_columns(common_cols)
             valid_part = datasets["validation"].select_columns(common_cols)
             
             combined_train = concatenate_datasets([train_part, valid_part])
             datasets["train"] = combined_train
-            print(f"Merged Train+Valid. New train size: {len(datasets['train'])}")
+            logger.info(f"Train+Valid 병합 완료. 새로운 학습 데이터 크기: {len(datasets['train'])}")
 
+    # KorQuad 데이터 추가 여부
     if data_args.add_korquad:
-        print("Adding KorQuad v1 dataset...")
+        logger.info("KorQuad v1 데이터셋 추가...")
         korquad = load_dataset("squad_kor_v1")
-
-        # KorQuad train dataset
         kq_train = korquad["train"]
 
         if data_args.korquad_only:
-            print("!! USING KORQUAD DATASET ONLY !! (Ignoring original dataset)")
+            logger.info("!! KorQuad 데이터셋만 사용 !! (기존 데이터셋 무시)")
             datasets["train"] = kq_train
-            print(f"KorQuad train size: {len(datasets['train'])}")
         
-        # Align features
         elif "train" in datasets:
             org_train = datasets["train"]
-
-            # Check for 'answers' feature compatibility (Sequence vs plain)
-            # KorQuad 'answers' feature might need casting if the original dataset uses a specific Sequence structure
-            # However, typically they are compatible.
-            # We filter columns to match the original dataset's columns that exist in KorQuad
-
             common_columns = [
                 col for col in org_train.column_names if col in kq_train.column_names
             ]
-
-            # If 'title' is in KorQuad but not in original, it's dropped by the intersection.
-            # If original has 'document_id' but KorQuad doesn't, we might have an issue if we just select common columns
-            # because concatenate requires exact same columns.
-
-            # Strategy: Add missing columns to KorQuad with None/Default, or drop extra columns from original?
-            # Usually, training only needs context, question, answers, id.
-            # Let's try to keep essential columns + whatever matches.
-
             kq_train = kq_train.select_columns(common_columns)
-
-            # If original has extra columns not in KorQuad (e.g. document_id), we might need to remove them from original for concatenation
-            # OR add them to KorQuad.
-            # Safe approach: Only keep columns present in BOTH for the training set.
-
             org_train_filtered = org_train.select_columns(common_columns)
-
-            # Cast features of KorQuad to match original (e.g. string vs Value('string'))
             kq_train = kq_train.cast(org_train_filtered.features)
 
             combined_train = concatenate_datasets([org_train_filtered, kq_train])
             datasets["train"] = combined_train
-            print(f"Added KorQuad. New train size: {len(datasets['train'])}")
+            logger.info(f"KorQuad 추가 완료. 새로운 학습 데이터 크기: {len(datasets['train'])}")
 
-    # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
-    # argument로 원하는 모델 이름을 설정하면 옵션을 바꿀 수 있습니다.
+    
+    logger.info("Config, Tokenizer, Model 로드...")
     config = AutoConfig.from_pretrained(
-        (
-            model_args.config_name
-            if model_args.config_name is not None
-            else model_args.model_name_or_path
-        ),
+        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        (
-            model_args.tokenizer_name
-            if model_args.tokenizer_name is not None
-            else model_args.model_name_or_path
-        ),
-        # 'use_fast' argument를 True로 설정할 경우 rust로 구현된 tokenizer를 사용할 수 있습니다.
-        # False로 설정할 경우 python으로 구현된 tokenizer를 사용할 수 있으며,
-        # rust version이 비교적 속도가 빠릅니다.
+        model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         use_fast=True,
     )
     model = AutoModelForQuestionAnswering.from_pretrained(
@@ -157,15 +124,30 @@ def main():
         config=config,
     )
 
-    print(
-        type(training_args),
-        type(model_args),
-        type(datasets),
-        type(tokenizer),
-        type(model),
-    )
+    # WandB 설정
+    training_args.report_to = ["wandb"]
+    if "WANDB_PROJECT" not in os.environ:
+        os.environ["WANDB_PROJECT"] = "QDQA"
+    if training_args.run_name is None:
+        training_args.run_name = training_args.output_dir.split("/")[-1]
 
-    # do_train mrc model 혹은 do_eval mrc model
+    # 최종 설정 확인용 요약 출력 (Training 전 사용자 확인용)
+    print("\n" + "=" * 50)
+    print(" [ RUN CONFIGURATION SUMMARY ]")
+    print(f" | Model          : {model_args.model_name_or_path}")
+    print(f" | Dataset        : {data_args.dataset_name}")
+    print(f" | Train Samples  : {len(datasets['train']) if 'train' in datasets else 0}")
+    print(f" | Output Dir     : {training_args.output_dir}")
+    print(f" | Run Name       : {training_args.run_name}")
+    print(f" | Batch Size     : {training_args.per_device_train_batch_size}")
+    print(f" | Learning Rate  : {training_args.learning_rate}")
+    print(f" | Epochs         : {training_args.num_train_epochs}")
+    print(f" | Seed           : {training_args.seed}")
+    print(f" | Include Valid  : {data_args.include_validation}")
+    print(f" | Add KorQuad    : {data_args.add_korquad}")
+    print(f" | KorQuad Only   : {data_args.korquad_only}")
+    print("=" * 50 + "\n")
+
     if training_args.do_train or training_args.do_eval:
         run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
 
@@ -179,8 +161,7 @@ def run_mrc(
     model,
 ) -> NoReturn:
 
-    # dataset을 전처리합니다.
-    # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.
+    # 데이터셋 전처리 설정
     if training_args.do_train:
         column_names = datasets["train"].column_names
     else:
@@ -190,19 +171,20 @@ def run_mrc(
     context_column_name = "context" if "context" in column_names else column_names[1]
     answer_column_name = "answers" if "answers" in column_names else column_names[2]
 
-    # Padding에 대한 옵션을 설정합니다.
-    # (question|context) 혹은 (context|question)로 세팅 가능합니다.
     pad_on_right = tokenizer.padding_side == "right"
 
-    # 오류가 있는지 확인합니다.
     last_checkpoint, max_seq_length = check_no_error(
         data_args, training_args, datasets, tokenizer
     )
 
-    # Train preprocessing / 전처리를 진행합니다.
+    # Train 전처리 함수
     def prepare_train_features(examples):
-        # truncation과 padding(length가 짧을때만)을 통해 toknization을 진행하며, stride를 이용하여 overflow를 유지합니다.
-        # 각 example들은 이전의 context와 조금씩 겹치게됩니다.
+        """
+        학습 데이터 전처리를 수행합니다.
+        1. 텍스트 토크나이징 (padding, truncation, stride 적용)
+        2. 정답(Answer)의 Character 좌표를 Token 좌표로 변환 (Start/End position)
+        3. 정답이 잘린 경우 CLS 토큰으로 매핑
+        """
         tokenized_examples = tokenizer(
             examples[question_column_name if pad_on_right else context_column_name],
             examples[context_column_name if pad_on_right else question_column_name],
@@ -211,51 +193,38 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            return_token_type_ids=False,  # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False,
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
-        # 길이가 긴 context가 등장할 경우 truncate를 진행해야하므로, 해당 데이터셋을 찾을 수 있도록 mapping 가능한 값이 필요합니다.
         sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
-        # token의 캐릭터 단위 position를 찾을 수 있도록 offset mapping을 사용합니다.
-        # start_positions과 end_positions을 찾는데 도움을 줄 수 있습니다.
         offset_mapping = tokenized_examples.pop("offset_mapping")
 
-        # 데이터셋에 "start position", "enc position" label을 부여합니다.
         tokenized_examples["start_positions"] = []
         tokenized_examples["end_positions"] = []
 
         for i, offsets in enumerate(offset_mapping):
             input_ids = tokenized_examples["input_ids"][i]
-            cls_index = input_ids.index(tokenizer.cls_token_id)  # cls index
-
-            # sequence id를 설정합니다 (to know what is the context and what is the question).
+            cls_index = input_ids.index(tokenizer.cls_token_id)
             sequence_ids = tokenized_examples.sequence_ids(i)
-
-            # 하나의 example이 여러개의 span을 가질 수 있습니다.
             sample_index = sample_mapping[i]
             answers = examples[answer_column_name][sample_index]
 
-            # answer가 없을 경우 cls_index를 answer로 설정합니다(== example에서 정답이 없는 경우 존재할 수 있음).
             if len(answers["answer_start"]) == 0:
                 tokenized_examples["start_positions"].append(cls_index)
                 tokenized_examples["end_positions"].append(cls_index)
             else:
-                # text에서 정답의 Start/end character index
                 start_char = answers["answer_start"][0]
                 end_char = start_char + len(answers["text"][0])
 
-                # text에서 current span의 Start token index
                 token_start_index = 0
                 while sequence_ids[token_start_index] != (1 if pad_on_right else 0):
                     token_start_index += 1
 
-                # text에서 current span의 End token index
                 token_end_index = len(input_ids) - 1
                 while sequence_ids[token_end_index] != (1 if pad_on_right else 0):
                     token_end_index -= 1
 
-                # 정답이 span을 벗어났는지 확인합니다(정답이 없는 경우 CLS index로 label되어있음).
                 if not (
                     offsets[token_start_index][0] <= start_char
                     and offsets[token_end_index][1] >= end_char
@@ -263,8 +232,6 @@ def run_mrc(
                     tokenized_examples["start_positions"].append(cls_index)
                     tokenized_examples["end_positions"].append(cls_index)
                 else:
-                    # token_start_index 및 token_end_index를 answer의 끝으로 이동합니다.
-                    # Note: answer가 마지막 단어인 경우 last offset을 따라갈 수 있습니다(edge case).
                     while (
                         token_start_index < len(offsets)
                         and offsets[token_start_index][0] <= start_char
@@ -281,8 +248,8 @@ def run_mrc(
         if "train" not in datasets:
             raise ValueError("--do_train requires a train dataset")
         train_dataset = datasets["train"]
-
-        # dataset에서 train feature를 생성합니다.
+        
+        logger.info("학습 데이터 전처리...")
         train_dataset = train_dataset.map(
             prepare_train_features,
             batched=True,
@@ -291,10 +258,12 @@ def run_mrc(
             load_from_cache_file=not data_args.overwrite_cache,
         )
 
-    # Validation preprocessing
+    # Validation 전처리 함수
     def prepare_validation_features(examples):
-        # truncation과 padding(length가 짧을때만)을 통해 toknization을 진행하며, stride를 이용하여 overflow를 유지합니다.
-        # 각 example들은 이전의 context와 조금씩 겹치게됩니다.
+        """
+        검증 데이터 전처리를 수행합니다.
+        Overflowing token을 매핑하고, 정답 추론을 위한 example_id를 보존합니다.
+        """
         tokenized_examples = tokenizer(
             examples[question_column_name if pad_on_right else context_column_name],
             examples[context_column_name if pad_on_right else question_column_name],
@@ -303,27 +272,19 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            return_token_type_ids=False,  # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False,
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
-        # 길이가 긴 context가 등장할 경우 truncate를 진행해야하므로, 해당 데이터셋을 찾을 수 있도록 mapping 가능한 값이 필요합니다.
         sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
-
-        # evaluation을 위해, prediction을 context의 substring으로 변환해야합니다.
-        # corresponding example_id를 유지하고 offset mappings을 저장해야합니다.
         tokenized_examples["example_id"] = []
 
         for i in range(len(tokenized_examples["input_ids"])):
-            # sequence id를 설정합니다 (to know what is the context and what is the question).
             sequence_ids = tokenized_examples.sequence_ids(i)
             context_index = 1 if pad_on_right else 0
-
-            # 하나의 example이 여러개의 span을 가질 수 있습니다.
             sample_index = sample_mapping[i]
             tokenized_examples["example_id"].append(examples["id"][sample_index])
 
-            # Set to None the offset_mapping을 None으로 설정해서 token position이 context의 일부인지 쉽게 판별 할 수 있습니다.
             tokenized_examples["offset_mapping"][i] = [
                 (o if sequence_ids[k] == context_index else None)
                 for k, o in enumerate(tokenized_examples["offset_mapping"][i])
@@ -332,8 +293,7 @@ def run_mrc(
 
     if training_args.do_eval:
         eval_dataset = datasets["validation"]
-
-        # Validation Feature 생성
+        logger.info("검증 데이터 전처리...")
         eval_dataset = eval_dataset.map(
             prepare_validation_features,
             batched=True,
@@ -342,16 +302,11 @@ def run_mrc(
             load_from_cache_file=not data_args.overwrite_cache,
         )
 
-    # Data collator
-    # flag가 True이면 이미 max length로 padding된 상태입니다.
-    # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
     data_collator = DataCollatorWithPadding(
         tokenizer, pad_to_multiple_of=8 if training_args.fp16 else None
     )
 
-    # Post-processing:
     def post_processing_function(examples, features, predictions, training_args):
-        # Post-processing: start logits과 end logits을 original context의 정답과 match시킵니다.
         predictions = postprocess_qa_predictions(
             examples=examples,
             features=features,
@@ -359,13 +314,11 @@ def run_mrc(
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
         )
-        # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [
             {"id": k, "prediction_text": v} for k, v in predictions.items()
         ]
         if training_args.do_predict:
             return formatted_predictions
-
         elif training_args.do_eval:
             references = [
                 {"id": ex["id"], "answers": ex[answer_column_name]}
@@ -379,11 +332,8 @@ def run_mrc(
 
     def compute_metrics(p: EvalPrediction):
         metrics = metric.compute(predictions=p.predictions, references=p.label_ids)
-
-        # Manually add the "eval_" prefix to match what the Trainer expects
         return {f"eval_{k}": v for k, v in metrics.items()}
 
-    # Trainer 초기화
     trainer = QuestionAnsweringTrainer(
         model=model,
         args=training_args,
@@ -396,7 +346,6 @@ def run_mrc(
         compute_metrics=compute_metrics,
     )
 
-    # Training
     if training_args.do_train:
         if last_checkpoint is not None:
             checkpoint = last_checkpoint
@@ -404,8 +353,10 @@ def run_mrc(
             checkpoint = model_args.model_name_or_path
         else:
             checkpoint = None
+        
+        logger.info("학습 시작...")
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        trainer.save_model()  # Saves the tokenizer too for easy upload
+        trainer.save_model()
 
         metrics = train_result.metrics
         metrics["train_samples"] = len(train_dataset)
@@ -415,25 +366,21 @@ def run_mrc(
         trainer.save_state()
 
         output_train_file = os.path.join(training_args.output_dir, "train_results.txt")
-
         with open(output_train_file, "w") as writer:
-            logger.info("***** Train results *****")
+            logger.info("***** 학습 결과 *****")
             for key, value in sorted(train_result.metrics.items()):
                 logger.info(f"  {key} = {value}")
                 writer.write(f"{key} = {value}\n")
 
-        # State 저장
         trainer.state.save_to_json(
             os.path.join(training_args.output_dir, "trainer_state.json")
         )
 
-    # Evaluation
     if training_args.do_eval:
-        logger.info("*** Evaluate ***")
+        logger.info("평가 시작...")
+        logger.info("*** 평가 수행 ***")
         metrics = trainer.evaluate()
-
         metrics["eval_samples"] = len(eval_dataset)
-
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
